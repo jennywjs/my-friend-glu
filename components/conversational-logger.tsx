@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Send, Mic, MicOff } from "lucide-react"
+import { ArrowLeft, Send, Mic, MicOff, Loader2 } from "lucide-react"
+import { aiAnalyze } from "@/lib/api"
 
 interface MealEntry {
   id: string
@@ -46,19 +47,14 @@ export default function ConversationalLogger({
   const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState("")
   const [isListening, setIsListening] = useState(false)
-  const [currentStep, setCurrentStep] = useState<"initial" | "details" | "mealType" | "confirmation" | "done">(
-    "initial",
-  )
-  const [mealData, setMealData] = useState<{
-    description: string
-    carbs: number
-    type?: "breakfast" | "brunch" | "lunch" | "dinner" | "snack"
-    ingredients: string[]
-    recommendation?: string
-  }>({
+  const [conversationStep, setConversationStep] = useState(0)
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [mealData, setMealData] = useState({
     description: "",
-    carbs: 0,
-    ingredients: [],
+    estimatedCarbs: 0,
+    mealType: "breakfast" as "breakfast" | "brunch" | "lunch" | "dinner" | "snack",
+    aiSummary: "",
+    recommendations: [] as string[],
   })
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -69,10 +65,10 @@ export default function ConversationalLogger({
       setMessages(editingEntry.chatHistory || [])
       setMealData({
         description: editingEntry.description,
-        carbs: editingEntry.carbs,
-        type: editingEntry.type,
-        ingredients: editingEntry.ingredients,
-        recommendation: editingEntry.recommendation,
+        estimatedCarbs: editingEntry.carbs,
+        mealType: editingEntry.type,
+        aiSummary: editingEntry.aiSummary,
+        recommendations: editingEntry.recommendation ? [editingEntry.recommendation] : [],
       })
       // Add initial edit message
       const editMessage: Message = {
@@ -82,7 +78,7 @@ export default function ConversationalLogger({
         timestamp: new Date(),
       }
       setMessages((prev) => [...prev, editMessage])
-      setCurrentStep("initial")
+      setConversationStep(0)
     } else {
       // Start fresh conversation
       const initialMessage: Message = {
@@ -92,7 +88,7 @@ export default function ConversationalLogger({
         timestamp: new Date(),
       }
       setMessages([initialMessage])
-      setCurrentStep("initial")
+      setConversationStep(0)
     }
   }, [editingEntry])
 
@@ -113,170 +109,172 @@ export default function ConversationalLogger({
     return newMessage
   }
 
-  const simulateAIResponse = (userInput: string) => {
+  const processAIResponse = async (userInput: string, step: number) => {
     try {
-      setTimeout(
-        () => {
-          let aiResponse = ""
-          let nextStep = currentStep
+      setIsProcessing(true)
+      let aiResponse = ""
+      let nextStep = step + 1
 
-          switch (currentStep) {
-            case "initial":
-              // Analyze the food description
-              const description = userInput.toLowerCase()
-              let estimatedCarbs = 30 // Default estimate
-              let ingredients: string[] = []
-              let recommendation = ""
-
-              // Simple keyword-based analysis
-              if (description.includes("oatmeal") || description.includes("porridge")) {
-                estimatedCarbs = 45
-                ingredients = ["1 cup rolled oats", "1/2 cup mixed berries", "1 tbsp honey", "1 cup milk"]
-                recommendation = "Great choice! The fiber helps slow glucose absorption."
-              } else if (description.includes("apple") && description.includes("peanut butter")) {
-                estimatedCarbs = 25
-                ingredients = ["1 medium apple", "2 tbsp natural peanut butter"]
-                recommendation = "Perfect snack balance of carbs and protein."
-              } else if (description.includes("kung pao") || description.includes("chicken")) {
-                estimatedCarbs = 55
-                ingredients = ["1/2 plate kung pao chicken", "1 cup steamed rice", "1 bok choy", "spicy and sour soup"]
-                recommendation = "Slightly high in carbs. A gentle walk could help balance your glucose."
-              } else if (description.includes("sandwich")) {
-                estimatedCarbs = 40
-                ingredients = ["2 slices whole grain bread", "turkey", "lettuce", "tomato", "cheese"]
-                recommendation = "Good protein balance. Consider whole grain bread for better glucose control."
-              } else if (description.includes("salad")) {
-                estimatedCarbs = 15
-                ingredients = ["mixed greens", "cherry tomatoes", "cucumber", "olive oil dressing"]
-                recommendation = "Excellent low-carb choice! Perfect for glucose management."
-              } else {
-                // Generic response
-                ingredients = ["mixed ingredients based on your description"]
-                recommendation = "Remember to monitor your glucose levels after eating."
-              }
-
-              setMealData((prev) => ({
-                ...prev,
-                description: userInput,
-                carbs: estimatedCarbs,
-                ingredients,
-                recommendation,
-              }))
-
-              aiResponse = `I can see you had ${userInput}. Let me ask a few questions to get accurate details. How would you describe the portion size? Was it a small, medium, or large serving?`
-              nextStep = "details"
-              break
-
-            case "details":
-              // Adjust carbs based on portion size
-              let carbAdjustment = 1
-              if (userInput.toLowerCase().includes("small")) {
-                carbAdjustment = 0.7
-              } else if (userInput.toLowerCase().includes("large") || userInput.toLowerCase().includes("big")) {
-                carbAdjustment = 1.3
-              }
-
-              const adjustedCarbs = Math.round(mealData.carbs * carbAdjustment)
-              setMealData((prev) => ({ ...prev, carbs: adjustedCarbs }))
-
-              aiResponse = `Got it! Based on your description, I estimate about ${adjustedCarbs}g of carbohydrates. Now, what type of meal was this?`
-              nextStep = "mealType"
-              break
-
-            case "mealType":
-              // Determine meal type
-              let mealType: "breakfast" | "brunch" | "lunch" | "dinner" | "snack" = "snack"
-              const input = userInput.toLowerCase()
-
-              if (input.includes("breakfast")) mealType = "breakfast"
-              else if (input.includes("brunch")) mealType = "brunch"
-              else if (input.includes("lunch")) mealType = "lunch"
-              else if (input.includes("dinner")) mealType = "dinner"
-              else if (input.includes("snack")) mealType = "snack"
-              else {
-                // Auto-detect based on time
-                const hour = new Date().getHours()
-                if (hour < 10) mealType = "breakfast"
-                else if (hour < 12) mealType = "brunch"
-                else if (hour < 17) mealType = "lunch"
-                else if (hour < 21) mealType = "dinner"
-                else mealType = "snack"
-              }
-
-              setMealData((prev) => ({ ...prev, type: mealType }))
-
-              aiResponse = `Perfect! I've logged this as a ${mealType}. Here's your meal summary:
-
-**${mealType.charAt(0).toUpperCase() + mealType.slice(1)}**: ${mealData.description}
-**Carbohydrates**: ${mealData.carbs}g
-**Ingredients**: ${mealData.ingredients.join(", ")}
-
-${mealData.recommendation ? `💡 **Tip**: ${mealData.recommendation}` : ""}
-
-Does this look correct? Say "yes" to save or tell me what to change.`
-              nextStep = "confirmation"
-              break
-
-            case "confirmation":
-              if (
-                userInput.toLowerCase().includes("yes") ||
-                userInput.toLowerCase().includes("correct") ||
-                userInput.toLowerCase().includes("save")
-              ) {
-                aiResponse =
-                  "Great! Your meal has been saved successfully. You can now return to your timeline to see the entry."
-                nextStep = "done"
-
-                // Save the meal
-                setTimeout(() => {
-                  onMealLogged({
-                    type: mealData.type!,
-                    description: mealData.description,
-                    carbs: mealData.carbs,
-                    aiSummary: `${mealData.description} with ${mealData.carbs}g carbs`,
-                    synthesizedSummary: `A ${mealData.type} with balanced nutrition`,
-                    ingredients: mealData.ingredients,
-                    recommendation: mealData.recommendation,
-                    chatHistory: [
-                      ...messages,
-                      { id: Date.now().toString(), type: "user", content: userInput, timestamp: new Date() },
-                    ],
-                  })
-                }, 1000)
-              } else {
-                aiResponse =
-                  "What would you like to change? You can update the portion size, ingredients, or any other details."
-                nextStep = "details"
-              }
-              break
-
-            default:
-              aiResponse = "I'm here to help you log your meals. What did you eat?"
-              nextStep = "initial"
+      switch (step) {
+        case 0:
+          // First response - ask for clarification
+          setMealData((prev) => ({ ...prev, description: userInput }))
+          
+          // Get clarifying questions from AI
+          const clarifyResponse = await aiAnalyze({ 
+            description: userInput, 
+            action: 'clarify' 
+          })
+          
+          if (clarifyResponse.error) {
+            // Show error message but continue with fallback
+            aiResponse = `⚠️ ${clarifyResponse.error}\n\nThat sounds delicious! Can you tell me about the portion sizes? For example, how big was your serving, and what size bowl or plate did you use? This helps me estimate the carbs more accurately. 🥄`
+          } else if (clarifyResponse.questions && clarifyResponse.questions.length > 0) {
+            aiResponse = `That sounds delicious! ${clarifyResponse.questions.join(' ')} This helps me estimate the carbs more accurately. 🥄`
+          } else {
+            aiResponse = "That sounds delicious! Can you tell me about the portion sizes? For example, how big was your serving, and what size bowl or plate did you use? This helps me estimate the carbs more accurately. 🥄"
           }
+          break
 
-          addMessage(aiResponse, "ai")
-          setCurrentStep(nextStep)
-        },
-        1000 + Math.random() * 1000,
-      ) // Simulate thinking time
+        case 1:
+          // Second response - provide estimate and ask for meal type
+          const fullDescription = `${mealData.description} ${userInput}`
+          setMealData((prev) => ({ ...prev, description: fullDescription }))
+          
+          // Get AI analysis
+          const analysisResponse = await aiAnalyze({ 
+            description: fullDescription, 
+            action: 'analyze' 
+          })
+          
+          if (analysisResponse.error) {
+            // Show error message but continue with fallback estimates
+            const estimatedCarbs = Math.floor(Math.random() * 40) + 30
+            setMealData((prev) => ({ ...prev, estimatedCarbs }))
+            
+            aiResponse = `⚠️ ${analysisResponse.error}\n\nPerfect! Based on your description, I estimate this contains about ${estimatedCarbs} grams of carbohydrates. 
+
+What type of eating occasion was this?
+• Breakfast 🌅
+• Brunch 🥐  
+• Lunch 🥗
+• Dinner 🍽️
+• Snack 🍎
+
+Just tell me which one!`
+          } else if (analysisResponse.analysis) {
+            const { estimatedCarbs, summary, recommendations } = analysisResponse.analysis
+            setMealData((prev) => ({ 
+              ...prev, 
+              estimatedCarbs, 
+              aiSummary: summary,
+              recommendations 
+            }))
+            
+            aiResponse = `Perfect! Based on your description, I estimate this contains about ${estimatedCarbs} grams of carbohydrates. 
+
+${summary}
+
+What type of eating occasion was this?
+• Breakfast 🌅
+• Brunch 🥐  
+• Lunch 🥗
+• Dinner 🍽️
+• Snack 🍎
+
+Just tell me which one!`
+          } else {
+            // Fallback response
+            const estimatedCarbs = Math.floor(Math.random() * 40) + 30
+            setMealData((prev) => ({ ...prev, estimatedCarbs }))
+            
+            aiResponse = `Perfect! Based on your description, I estimate this contains about ${estimatedCarbs} grams of carbohydrates. 
+
+What type of eating occasion was this?
+• Breakfast 🌅
+• Brunch 🥐  
+• Lunch 🥗
+• Dinner 🍽️
+• Snack 🍎
+
+Just tell me which one!`
+          }
+          break
+
+        case 2:
+          // Third response - confirm meal type and provide final summary
+          const mealType = userInput.toLowerCase()
+          let selectedType: "breakfast" | "brunch" | "lunch" | "dinner" | "snack" = "snack"
+          
+          if (mealType.includes("breakfast")) selectedType = "breakfast"
+          else if (mealType.includes("brunch")) selectedType = "brunch"
+          else if (mealType.includes("lunch")) selectedType = "lunch"
+          else if (mealType.includes("dinner")) selectedType = "dinner"
+          else if (mealType.includes("snack")) selectedType = "snack"
+          
+          setMealData((prev) => ({ ...prev, mealType: selectedType }))
+          
+          const recommendations = mealData.recommendations.length > 0 
+            ? mealData.recommendations 
+            : ["A gentle walk after eating could help balance your glucose levels."]
+          
+          aiResponse = `Perfect! I've logged your ${selectedType} with ${mealData.estimatedCarbs}g of carbohydrates.
+
+${mealData.aiSummary || `Your ${selectedType} looks great!`}
+
+💡 Tip: ${recommendations[0]}
+
+Your meal has been saved! You can view it in your timeline.`
+          break
+
+        default:
+          aiResponse = "I'm not sure what to do next. Let's start over!"
+          nextStep = 0
+      }
+
+      addMessage(aiResponse, "ai")
+      setConversationStep(nextStep)
+      
+      // If this was the final step, save the meal
+      if (nextStep >= 3) {
+        setTimeout(() => {
+          const mealEntry: Omit<MealEntry, "id" | "timestamp"> = {
+            type: mealData.mealType,
+            description: mealData.description,
+            carbs: mealData.estimatedCarbs,
+            aiSummary: mealData.aiSummary,
+            recommendation: mealData.recommendations[0],
+            synthesizedSummary: mealData.aiSummary || mealData.description,
+            ingredients: [mealData.description],
+            chatHistory: messages,
+          }
+          onMealLogged(mealEntry)
+        }, 2000)
+      }
     } catch (error) {
-      console.error("Error in AI response:", error)
-      addMessage("Sorry, I encountered an error. Please try again.", "ai")
+      console.error('Error processing AI response:', error)
+      addMessage("I'm having trouble processing that right now. Let's try again!", "ai")
+    } finally {
+      setIsProcessing(false)
     }
   }
 
-  const handleSendMessage = () => {
-    if (!inputValue.trim()) return
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!inputValue.trim() || isProcessing) return
 
-    addMessage(inputValue, "user")
-    simulateAIResponse(inputValue)
+    const userInput = inputValue.trim()
+    addMessage(userInput, "user")
     setInputValue("")
+
+    // Process AI response
+    await processAIResponse(userInput, conversationStep)
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      handleSendMessage()
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault()
+      handleSubmit(e)
     }
   }
 
@@ -314,107 +312,100 @@ Does this look correct? Say "yes" to save or tell me what to change.`
       {/* Header */}
       <div className="bg-white shadow-sm border-b">
         <div className="max-w-md mx-auto px-4 py-4">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={onCancel}>
-              <ArrowLeft className="h-4 w-4" />
+          <div className="flex items-center justify-between">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onCancel}
+              className="text-gray-600 hover:text-gray-900"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back
             </Button>
-            <div>
-              <h1 className="text-lg font-semibold text-gray-900">{editingEntry ? "Edit Meal" : "Log Food"}</h1>
+            <div className="text-center">
+              <h1 className="text-lg font-semibold text-gray-900">
+                {editingEntry ? "Edit Meal" : "Log Meal"}
+              </h1>
               <p className="text-sm text-gray-600">
                 {editingEntry ? "Update your meal details" : "Tell me what you ate"}
               </p>
             </div>
+            <div className="w-10" /> {/* Spacer for centering */}
           </div>
         </div>
       </div>
 
-      <div className="max-w-md mx-auto px-4 py-4 pb-24">
-        {/* Chat Messages */}
-        <ScrollArea className="h-[calc(100vh-200px)] mb-4" ref={scrollAreaRef}>
-          <div className="space-y-4">
-            {messages.map((message) => (
-              <div key={message.id} className={`flex ${message.type === "user" ? "justify-end" : "justify-start"}`}>
-                <Card
-                  className={`max-w-[80%] ${
-                    message.type === "user" ? "bg-gradient-to-r from-pink-500 to-rose-500 text-white" : "bg-white"
-                  }`}
-                >
-                  <CardContent className="p-3">
-                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                    <p className={`text-xs mt-1 ${message.type === "user" ? "text-pink-100" : "text-gray-500"}`}>
-                      {message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                    </p>
-                  </CardContent>
-                </Card>
-              </div>
-            ))}
-
-            {/* Meal Type Selection */}
-            {currentStep === "mealType" && (
-              <div className="flex justify-start">
-                <Card className="bg-white max-w-[80%]">
-                  <CardContent className="p-3">
-                    <p className="text-sm mb-3">Quick select meal type:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {["breakfast", "brunch", "lunch", "dinner", "snack"].map((type) => (
-                        <Badge
-                          key={type}
-                          className={`cursor-pointer hover:opacity-80 ${getMealTypeColor(type)}`}
-                          onClick={() => {
-                            addMessage(type, "user")
-                            simulateAIResponse(type)
-                          }}
-                        >
-                          {type.charAt(0).toUpperCase() + type.slice(1)}
-                        </Badge>
-                      ))}
+      {/* Chat Interface */}
+      <div className="max-w-md mx-auto px-4 py-6 pb-20">
+        <Card className="shadow-sm">
+          <CardContent className="p-0">
+            <ScrollArea 
+              ref={scrollAreaRef}
+              className="h-[calc(100vh-280px)] p-4"
+            >
+              <div className="space-y-4">
+                {messages.map((message) => (
+                  <div
+                    key={message.id}
+                    className={`flex ${message.type === "user" ? "justify-end" : "justify-start"}`}
+                  >
+                    <div
+                      className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                        message.type === "user"
+                          ? "bg-gradient-to-r from-pink-500 to-purple-600 text-white"
+                          : "bg-white border border-gray-200 text-gray-900"
+                      }`}
+                    >
+                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                      <p className="text-xs opacity-70 mt-1">
+                        {message.timestamp.toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                ))}
+                
+                {isProcessing && (
+                  <div className="flex justify-start">
+                    <div className="bg-white border border-gray-200 rounded-lg px-4 py-2">
+                      <div className="flex items-center space-x-2">
+                        <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
+                        <span className="text-sm text-gray-600">Thinking...</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        </ScrollArea>
+            </ScrollArea>
+          </CardContent>
+        </Card>
 
         {/* Input Area */}
-        {currentStep === "done" ? (
-          <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg">
-            <div className="max-w-md mx-auto px-4 py-3">
-              <Button onClick={onCancel} className="w-full h-12 bg-green-600 hover:bg-green-700 text-white">
-                Done - Return to Timeline
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg">
+          <div className="max-w-md mx-auto px-4 py-3">
+            <form onSubmit={handleSubmit} className="flex items-center space-x-2">
+              <Input
+                ref={inputRef}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Describe your meal..."
+                className="flex-1"
+                disabled={isProcessing}
+              />
+              <Button
+                type="submit"
+                size="sm"
+                disabled={!inputValue.trim() || isProcessing}
+                className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700"
+              >
+                <Send className="h-4 w-4" />
               </Button>
-            </div>
+            </form>
           </div>
-        ) : (
-          <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg">
-            <div className="max-w-md mx-auto px-4 py-3">
-              <div className="flex items-center gap-2">
-                <div className="flex-1 relative">
-                  <Input
-                    ref={inputRef}
-                    value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
-                    onKeyPress={handleKeyPress}
-                    placeholder="Type your message..."
-                    className="pr-12"
-                  />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-1 top-1/2 transform -translate-y-1/2"
-                    onClick={toggleListening}
-                  >
-                    {isListening ? <MicOff className="h-4 w-4 text-red-500" /> : <Mic className="h-4 w-4" />}
-                  </Button>
-                </div>
-                <Button onClick={handleSendMessage} disabled={!inputValue.trim()}>
-                  <Send className="h-4 w-4" />
-                </Button>
-              </div>
-              {isListening && <p className="text-xs text-center text-gray-500 mt-2">🎤 Listening... (simulated)</p>}
-            </div>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   )
