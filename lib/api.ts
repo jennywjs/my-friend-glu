@@ -1,6 +1,9 @@
-const API_BASE = typeof window !== 'undefined' && window.location.port
-  ? `${window.location.protocol}//${window.location.hostname}:${window.location.port}/api`
-  : '/api';
+const getAPIBase = () => {
+  if (typeof window !== 'undefined' && window.location && window.location.port) {
+    return `${window.location.protocol}//${window.location.hostname}:${window.location.port}/api`;
+  }
+  return '/api';
+};
 
 // --- Token Management ---
 const TOKEN_KEY = 'glu_jwt_token';
@@ -35,7 +38,7 @@ function authHeaders(): Record<string, string> {
 // --- API Calls ---
 
 export async function register({ email, password, name }: { email: string; password: string; name: string }) {
-  const res = await fetch(`${API_BASE}/auth/register`, {
+  const res = await fetch(`${getAPIBase()}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password, name })
@@ -46,7 +49,7 @@ export async function register({ email, password, name }: { email: string; passw
 }
 
 export async function login({ email, password }: { email: string; password: string }) {
-  const res = await fetch(`${API_BASE}/auth/login`, {
+  const res = await fetch(`${getAPIBase()}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password })
@@ -57,14 +60,14 @@ export async function login({ email, password }: { email: string; password: stri
 }
 
 export async function getProfile() {
-  const res = await fetch(`${API_BASE}/user/profile`, {
+  const res = await fetch(`${getAPIBase()}/user/profile`, {
     headers: { ...authHeaders() }
   });
   return res.json();
 }
 
 export async function updateProfile({ name }: { name: string }) {
-  const res = await fetch(`${API_BASE}/user/profile`, {
+  const res = await fetch(`${getAPIBase()}/user/profile`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ name })
@@ -73,7 +76,7 @@ export async function updateProfile({ name }: { name: string }) {
 }
 
 export async function logMeal({ description, mealType }: { description: string; mealType: string }) {
-  const res = await fetch(`${API_BASE}/meals`, {
+  const res = await fetch(`${getAPIBase()}/meals`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ description, mealType })
@@ -84,14 +87,14 @@ export async function logMeal({ description, mealType }: { description: string; 
 export async function getMeals({ page = 1, limit = 20, date }: { page?: number; limit?: number; date?: string } = {}) {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (date) params.append('date', date);
-  const res = await fetch(`${API_BASE}/meals?${params.toString()}`, {
+  const res = await fetch(`${getAPIBase()}/meals?${params.toString()}`, {
     headers: { ...authHeaders() }
   });
   return res.json();
 }
 
 export async function aiAnalyze({ description, action = 'analyze' }: { description: string; action?: 'analyze' | 'clarify' }) {
-  const res = await fetch(`${API_BASE}/ai/analyze`, {
+  const res = await fetch(`${getAPIBase()}/ai/analyze`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ description, action })
