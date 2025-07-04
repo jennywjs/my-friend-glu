@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { MessageCircle, Clock, Utensils, Coffee } from "lucide-react"
-import ConversationalLogger from "@/components/conversational-logger"
+import SimpleLogger from "@/components/simple-logger"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ChevronDown } from "lucide-react"
 
@@ -59,38 +59,10 @@ export default function HomePage() {
     },
   ])
   const [currentLogType, setCurrentLogType] = useState<"food">("food")
-  const [editingEntry, setEditingEntry] = useState<MealEntry | null>(null)
 
   const handleLogMeal = (type: "food") => {
     setCurrentLogType(type)
     setShowLogger(true)
-  }
-
-  const handleEditEntry = (entry: MealEntry) => {
-    setEditingEntry(entry)
-    setShowLogger(true)
-  }
-
-  const handleMealLogged = (entry: Omit<MealEntry, "id" | "timestamp">) => {
-    if (editingEntry) {
-      // Update existing entry
-      const updatedEntry: MealEntry = {
-        ...entry,
-        id: editingEntry.id,
-        timestamp: editingEntry.timestamp,
-      }
-      setMealEntries((prev) => prev.map((e) => (e.id === editingEntry.id ? updatedEntry : e)))
-      setEditingEntry(null)
-    } else {
-      // Create new entry
-      const newEntry: MealEntry = {
-        ...entry,
-        id: Date.now().toString(),
-        timestamp: new Date(),
-      }
-      setMealEntries((prev) => [newEntry, ...prev])
-    }
-    setShowLogger(false)
   }
 
   const formatTime = (date: Date) => {
@@ -128,17 +100,7 @@ export default function HomePage() {
   }
 
   if (showLogger) {
-    return (
-      <ConversationalLogger
-        logType={currentLogType}
-        editingEntry={editingEntry}
-        onMealLogged={handleMealLogged}
-        onCancel={() => {
-          setShowLogger(false)
-          setEditingEntry(null)
-        }}
-      />
-    )
+    return <SimpleLogger onCancel={() => setShowLogger(false)} />
   }
 
   return (
@@ -244,10 +206,7 @@ export default function HomePage() {
             ) : (
               mealEntries.map((entry) => (
                 <Card key={entry.id} className="shadow-sm hover:shadow-md transition-shadow">
-                  <CardContent
-                    className="p-4 cursor-pointer hover:bg-gray-50 transition-colors"
-                    onClick={() => handleEditEntry(entry)}
-                  >
+                  <CardContent className="p-4 cursor-pointer hover:bg-gray-50 transition-colors">
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-2">
                         {getMealIcon(entry.type)}
