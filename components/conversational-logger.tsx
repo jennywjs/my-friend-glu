@@ -8,8 +8,10 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Send, Mic, MicOff, Loader2 } from "lucide-react"
+import { ArrowLeft, Send, Mic, MicOff, Loader2, Volume2, VolumeX } from "lucide-react"
 import { aiAnalyze } from "@/lib/api"
+import VoiceInput from "@/components/voice-input"
+import { speakAIResponse, stopSpeech } from "@/lib/speech"
 
 interface MealEntry {
   id: string
@@ -49,6 +51,7 @@ export default function ConversationalLogger({
   const [isListening, setIsListening] = useState(false)
   const [conversationStep, setConversationStep] = useState(0)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [autoSpeak, setAutoSpeak] = useState(true)
   const [mealData, setMealData] = useState({
     description: "",
     estimatedCarbs: 0,
@@ -90,6 +93,11 @@ export default function ConversationalLogger({
       setMessages([initialMessage])
       setConversationStep(0)
     }
+
+    // Cleanup speech when component unmounts
+    return () => {
+      stopSpeech()
+    }
   }, [editingEntry])
 
   useEffect(() => {
@@ -106,6 +114,12 @@ export default function ConversationalLogger({
       timestamp: new Date(),
     }
     setMessages((prev) => [...prev, newMessage])
+    
+    // Speak AI responses automatically
+    if (type === "ai" && autoSpeak) {
+      speakAIResponse(content, true)
+    }
+    
     return newMessage
   }
 
@@ -278,15 +292,22 @@ Your meal has been saved! You can view it in your timeline.`
     }
   }
 
-  const toggleListening = () => {
-    setIsListening(!isListening)
-    // In a real app, you'd implement speech recognition here
-    if (!isListening) {
-      // Simulate voice input
-      setTimeout(() => {
-        setIsListening(false)
-        setInputValue("I had a bowl of oatmeal with berries")
-      }, 2000)
+  const handleVoiceTranscript = (transcript: string) => {
+    setInputValue(transcript)
+    // Auto-submit after voice input
+    setTimeout(() => {
+      if (transcript.trim()) {
+        addMessage(transcript.trim(), "user")
+        setInputValue("")
+        processAIResponse(transcript.trim(), conversationStep)
+      }
+    }, 500)
+  }
+
+  const toggleAutoSpeak = () => {
+    setAutoSpeak(!autoSpeak)
+    if (!autoSpeak) {
+      stopSpeech() // Stop any current speech when turning off
     }
   }
 
@@ -330,7 +351,15 @@ Your meal has been saved! You can view it in your timeline.`
                 {editingEntry ? "Update your meal details" : "Tell me what you ate"}
               </p>
             </div>
-            <div className="w-10" /> {/* Spacer for centering */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={toggleAutoSpeak}
+              className={`text-gray-600 hover:text-gray-900 ${autoSpeak ? 'text-blue-600' : 'text-gray-400'}`}
+              title={autoSpeak ? "Turn off voice responses" : "Turn on voice responses"}
+            >
+              {autoSpeak ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+            </Button>
           </div>
         </div>
       </div>
@@ -382,7 +411,17 @@ Your meal has been saved! You can view it in your timeline.`
           </CardContent>
         </Card>
 
-        {/* Input Area */}
+        {/* Voice Input Area */}
+        <div className="flex justify-center py-4">
+          <VoiceInput
+            onTranscript={handleVoiceTranscript}
+            isListening={isListening}
+            setIsListening={setIsListening}
+            disabled={isProcessing}
+          />
+        </div>
+
+        {/* Text Input Area */}
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg">
           <div className="max-w-md mx-auto px-4 py-3">
             <form onSubmit={handleSubmit} className="flex items-center space-x-2">
@@ -391,7 +430,7 @@ Your meal has been saved! You can view it in your timeline.`
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="Describe your meal..."
+                placeholder="Or type your meal description..."
                 className="flex-1"
                 disabled={isProcessing}
               />
