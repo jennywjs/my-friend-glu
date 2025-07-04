@@ -95,4 +95,3 @@ My Friend Glu solves this by offering an intuitive, conversational AI-based inte
 - Conduct UX testing with gestational diabetes patients.
 - Refine AI nutritional analysis with nutrition experts.
 - Prioritize rapid logging efficiency for frequent use cases.
-
