@@ -114,97 +114,98 @@ export default function ConversationalLogger({
   }
 
   const simulateAIResponse = (userInput: string) => {
-    setTimeout(
-      () => {
-        let aiResponse = ""
-        let nextStep = currentStep
+    try {
+      setTimeout(
+        () => {
+          let aiResponse = ""
+          let nextStep = currentStep
 
-        switch (currentStep) {
-          case "initial":
-            // Analyze the food description
-            const description = userInput.toLowerCase()
-            let estimatedCarbs = 30 // Default estimate
-            let ingredients: string[] = []
-            let recommendation = ""
+          switch (currentStep) {
+            case "initial":
+              // Analyze the food description
+              const description = userInput.toLowerCase()
+              let estimatedCarbs = 30 // Default estimate
+              let ingredients: string[] = []
+              let recommendation = ""
 
-            // Simple keyword-based analysis
-            if (description.includes("oatmeal") || description.includes("porridge")) {
-              estimatedCarbs = 45
-              ingredients = ["1 cup rolled oats", "1/2 cup mixed berries", "1 tbsp honey", "1 cup milk"]
-              recommendation = "Great choice! The fiber helps slow glucose absorption."
-            } else if (description.includes("apple") && description.includes("peanut butter")) {
-              estimatedCarbs = 25
-              ingredients = ["1 medium apple", "2 tbsp natural peanut butter"]
-              recommendation = "Perfect snack balance of carbs and protein."
-            } else if (description.includes("kung pao") || description.includes("chicken")) {
-              estimatedCarbs = 55
-              ingredients = ["1/2 plate kung pao chicken", "1 cup steamed rice", "1 bok choy", "spicy and sour soup"]
-              recommendation = "Slightly high in carbs. A gentle walk could help balance your glucose."
-            } else if (description.includes("sandwich")) {
-              estimatedCarbs = 40
-              ingredients = ["2 slices whole grain bread", "turkey", "lettuce", "tomato", "cheese"]
-              recommendation = "Good protein balance. Consider whole grain bread for better glucose control."
-            } else if (description.includes("salad")) {
-              estimatedCarbs = 15
-              ingredients = ["mixed greens", "cherry tomatoes", "cucumber", "olive oil dressing"]
-              recommendation = "Excellent low-carb choice! Perfect for glucose management."
-            } else {
-              // Generic response
-              ingredients = ["mixed ingredients based on your description"]
-              recommendation = "Remember to monitor your glucose levels after eating."
-            }
+              // Simple keyword-based analysis
+              if (description.includes("oatmeal") || description.includes("porridge")) {
+                estimatedCarbs = 45
+                ingredients = ["1 cup rolled oats", "1/2 cup mixed berries", "1 tbsp honey", "1 cup milk"]
+                recommendation = "Great choice! The fiber helps slow glucose absorption."
+              } else if (description.includes("apple") && description.includes("peanut butter")) {
+                estimatedCarbs = 25
+                ingredients = ["1 medium apple", "2 tbsp natural peanut butter"]
+                recommendation = "Perfect snack balance of carbs and protein."
+              } else if (description.includes("kung pao") || description.includes("chicken")) {
+                estimatedCarbs = 55
+                ingredients = ["1/2 plate kung pao chicken", "1 cup steamed rice", "1 bok choy", "spicy and sour soup"]
+                recommendation = "Slightly high in carbs. A gentle walk could help balance your glucose."
+              } else if (description.includes("sandwich")) {
+                estimatedCarbs = 40
+                ingredients = ["2 slices whole grain bread", "turkey", "lettuce", "tomato", "cheese"]
+                recommendation = "Good protein balance. Consider whole grain bread for better glucose control."
+              } else if (description.includes("salad")) {
+                estimatedCarbs = 15
+                ingredients = ["mixed greens", "cherry tomatoes", "cucumber", "olive oil dressing"]
+                recommendation = "Excellent low-carb choice! Perfect for glucose management."
+              } else {
+                // Generic response
+                ingredients = ["mixed ingredients based on your description"]
+                recommendation = "Remember to monitor your glucose levels after eating."
+              }
 
-            setMealData((prev) => ({
-              ...prev,
-              description: userInput,
-              carbs: estimatedCarbs,
-              ingredients,
-              recommendation,
-            }))
+              setMealData((prev) => ({
+                ...prev,
+                description: userInput,
+                carbs: estimatedCarbs,
+                ingredients,
+                recommendation,
+              }))
 
-            aiResponse = `I can see you had ${userInput}. Let me ask a few questions to get accurate details. How would you describe the portion size? Was it a small, medium, or large serving?`
-            nextStep = "details"
-            break
+              aiResponse = `I can see you had ${userInput}. Let me ask a few questions to get accurate details. How would you describe the portion size? Was it a small, medium, or large serving?`
+              nextStep = "details"
+              break
 
-          case "details":
-            // Adjust carbs based on portion size
-            let carbAdjustment = 1
-            if (userInput.toLowerCase().includes("small")) {
-              carbAdjustment = 0.7
-            } else if (userInput.toLowerCase().includes("large") || userInput.toLowerCase().includes("big")) {
-              carbAdjustment = 1.3
-            }
+            case "details":
+              // Adjust carbs based on portion size
+              let carbAdjustment = 1
+              if (userInput.toLowerCase().includes("small")) {
+                carbAdjustment = 0.7
+              } else if (userInput.toLowerCase().includes("large") || userInput.toLowerCase().includes("big")) {
+                carbAdjustment = 1.3
+              }
 
-            const adjustedCarbs = Math.round(mealData.carbs * carbAdjustment)
-            setMealData((prev) => ({ ...prev, carbs: adjustedCarbs }))
+              const adjustedCarbs = Math.round(mealData.carbs * carbAdjustment)
+              setMealData((prev) => ({ ...prev, carbs: adjustedCarbs }))
 
-            aiResponse = `Got it! Based on your description, I estimate about ${adjustedCarbs}g of carbohydrates. Now, what type of meal was this?`
-            nextStep = "mealType"
-            break
+              aiResponse = `Got it! Based on your description, I estimate about ${adjustedCarbs}g of carbohydrates. Now, what type of meal was this?`
+              nextStep = "mealType"
+              break
 
-          case "mealType":
-            // Determine meal type
-            let mealType: "breakfast" | "brunch" | "lunch" | "dinner" | "snack" = "snack"
-            const input = userInput.toLowerCase()
+            case "mealType":
+              // Determine meal type
+              let mealType: "breakfast" | "brunch" | "lunch" | "dinner" | "snack" = "snack"
+              const input = userInput.toLowerCase()
 
-            if (input.includes("breakfast")) mealType = "breakfast"
-            else if (input.includes("brunch")) mealType = "brunch"
-            else if (input.includes("lunch")) mealType = "lunch"
-            else if (input.includes("dinner")) mealType = "dinner"
-            else if (input.includes("snack")) mealType = "snack"
-            else {
-              // Auto-detect based on time
-              const hour = new Date().getHours()
-              if (hour < 10) mealType = "breakfast"
-              else if (hour < 12) mealType = "brunch"
-              else if (hour < 17) mealType = "lunch"
-              else if (hour < 21) mealType = "dinner"
-              else mealType = "snack"
-            }
+              if (input.includes("breakfast")) mealType = "breakfast"
+              else if (input.includes("brunch")) mealType = "brunch"
+              else if (input.includes("lunch")) mealType = "lunch"
+              else if (input.includes("dinner")) mealType = "dinner"
+              else if (input.includes("snack")) mealType = "snack"
+              else {
+                // Auto-detect based on time
+                const hour = new Date().getHours()
+                if (hour < 10) mealType = "breakfast"
+                else if (hour < 12) mealType = "brunch"
+                else if (hour < 17) mealType = "lunch"
+                else if (hour < 21) mealType = "dinner"
+                else mealType = "snack"
+              }
 
-            setMealData((prev) => ({ ...prev, type: mealType }))
+              setMealData((prev) => ({ ...prev, type: mealType }))
 
-            aiResponse = `Perfect! I've logged this as a ${mealType}. Here's your meal summary:
+              aiResponse = `Perfect! I've logged this as a ${mealType}. Here's your meal summary:
 
 **${mealType.charAt(0).toUpperCase() + mealType.slice(1)}**: ${mealData.description}
 **Carbohydrates**: ${mealData.carbs}g
@@ -213,52 +214,56 @@ export default function ConversationalLogger({
 ${mealData.recommendation ? `💡 **Tip**: ${mealData.recommendation}` : ""}
 
 Does this look correct? Say "yes" to save or tell me what to change.`
-            nextStep = "confirmation"
-            break
+              nextStep = "confirmation"
+              break
 
-          case "confirmation":
-            if (
-              userInput.toLowerCase().includes("yes") ||
-              userInput.toLowerCase().includes("correct") ||
-              userInput.toLowerCase().includes("save")
-            ) {
-              aiResponse =
-                "Great! Your meal has been saved successfully. You can now return to your timeline to see the entry."
-              nextStep = "done"
+            case "confirmation":
+              if (
+                userInput.toLowerCase().includes("yes") ||
+                userInput.toLowerCase().includes("correct") ||
+                userInput.toLowerCase().includes("save")
+              ) {
+                aiResponse =
+                  "Great! Your meal has been saved successfully. You can now return to your timeline to see the entry."
+                nextStep = "done"
 
-              // Save the meal
-              setTimeout(() => {
-                onMealLogged({
-                  type: mealData.type!,
-                  description: mealData.description,
-                  carbs: mealData.carbs,
-                  aiSummary: `${mealData.description} with ${mealData.carbs}g carbs`,
-                  synthesizedSummary: `A ${mealData.type} with balanced nutrition`,
-                  ingredients: mealData.ingredients,
-                  recommendation: mealData.recommendation,
-                  chatHistory: [
-                    ...messages,
-                    { id: Date.now().toString(), type: "user", content: userInput, timestamp: new Date() },
-                  ],
-                })
-              }, 1000)
-            } else {
-              aiResponse =
-                "What would you like to change? You can update the portion size, ingredients, or any other details."
-              nextStep = "details"
-            }
-            break
+                // Save the meal
+                setTimeout(() => {
+                  onMealLogged({
+                    type: mealData.type!,
+                    description: mealData.description,
+                    carbs: mealData.carbs,
+                    aiSummary: `${mealData.description} with ${mealData.carbs}g carbs`,
+                    synthesizedSummary: `A ${mealData.type} with balanced nutrition`,
+                    ingredients: mealData.ingredients,
+                    recommendation: mealData.recommendation,
+                    chatHistory: [
+                      ...messages,
+                      { id: Date.now().toString(), type: "user", content: userInput, timestamp: new Date() },
+                    ],
+                  })
+                }, 1000)
+              } else {
+                aiResponse =
+                  "What would you like to change? You can update the portion size, ingredients, or any other details."
+                nextStep = "details"
+              }
+              break
 
-          default:
-            aiResponse = "I'm here to help you log your meals. What did you eat?"
-            nextStep = "initial"
-        }
+            default:
+              aiResponse = "I'm here to help you log your meals. What did you eat?"
+              nextStep = "initial"
+          }
 
-        addMessage(aiResponse, "ai")
-        setCurrentStep(nextStep)
-      },
-      1000 + Math.random() * 1000,
-    ) // Simulate thinking time
+          addMessage(aiResponse, "ai")
+          setCurrentStep(nextStep)
+        },
+        1000 + Math.random() * 1000,
+      ) // Simulate thinking time
+    } catch (error) {
+      console.error("Error in AI response:", error)
+      addMessage("Sorry, I encountered an error. Please try again.", "ai")
+    }
   }
 
   const handleSendMessage = () => {
