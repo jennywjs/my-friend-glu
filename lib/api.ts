@@ -25,11 +25,13 @@ export function clearToken() {
 }
 
 function authHeaders(): Record<string, string> {
-  const token = getToken();
-  // For testing without authentication, we'll use a default token
-  // In production, this should require proper authentication
-  const testToken = token || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWNwYW4xYjgwMDAwcnp1bzd4OTBnZXY1IiwiZW1haWwiOiJ0ZXN0QGV4YW1wbGUuY29tIiwiaWF0IjoxNzUxNjYyNTIzLCJleHAiOjE3NTIyNjczMjN9.eA1j8O6r7IRbOiFADXyZ0WUPI9u_6IZVksYgP53_o3M";
-  return { Authorization: `Bearer ${testToken}` };
+  // Remove authentication for MVP deployability
+  return {};
+  // const token = getToken();
+  // // For testing without authentication, we'll use a default token
+  // // In production, this should require proper authentication
+  // const testToken = token || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWNwYW4xYjgwMDAwcnp1bzd4OTBnZXY1IiwiZW1haWwiOiJ0ZXN0QGV4YW1wbGUuY29tIiwiaWF0IjoxNzUxNjYyNTIzLCJleHAiOjE3NTIyNjczMjN9.eA1j8O6r7IRbOiFADXyZ0WUPI9u_6IZVksYgP53_o3M";
+  // return { Authorization: `Bearer ${testToken}` };
 }
 
 // --- API Calls ---

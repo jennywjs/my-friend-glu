@@ -1,17 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { analyzeMeal, generateClarifyingQuestions } from '@/lib/ai-service'
-import { extractTokenFromHeader, verifyToken } from '@/lib/auth'
 
 export async function POST(request: NextRequest) {
   try {
-    // Authenticate user
-    const authHeader = request.headers.get('authorization')
-    const token = extractTokenFromHeader(authHeader || undefined)
-    const user = token ? verifyToken(token) : null
+    // Remove authentication for MVP deployability
+    // const authHeader = request.headers.get('authorization')
+    // const token = extractTokenFromHeader(authHeader || undefined)
+    // const user = token ? verifyToken(token) : null
     
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    // if (!user) {
+    //   return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    // }
 
     const { description, action = 'analyze' } = await request.json()
 

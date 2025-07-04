@@ -17,6 +17,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { description, mealType } = body
     
+    console.log('Received meal data:', { description, mealType })
+    
     if (!description || !mealType) {
       return NextResponse.json(
         { error: 'Description and meal type are required' },
@@ -25,9 +27,12 @@ export async function POST(request: NextRequest) {
     }
     
     // Analyze meal with AI
+    console.log('Analyzing meal with AI...')
     const analysis = await analyzeMeal(description)
+    console.log('AI analysis result:', analysis)
     
     // Create meal record
+    console.log('Creating meal record in database...')
     const meal = await prisma.meal.create({
       data: {
         // userId: authResult.user.userId, // Remove userId for now
@@ -38,6 +43,8 @@ export async function POST(request: NextRequest) {
         aiSummary: analysis.summary
       }
     })
+    
+    console.log('Meal created successfully:', meal)
     
     return NextResponse.json({
       message: 'Meal logged successfully',
@@ -57,7 +64,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Meal logging error:', error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     )
   }
@@ -80,10 +87,12 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '20')
     const date = searchParams.get('date')
     
+    console.log('Fetching meals with params:', { page, limit, date })
+    
     const skip = (page - 1) * limit
     
     // Build where clause
-    const where = {} // Remove userId filter for now
+    const where: any = {} // Remove userId filter for now
     if (date) {
       const startDate = new Date(date)
       const endDate = new Date(date)
@@ -114,6 +123,8 @@ export async function GET(request: NextRequest) {
     // Get total count
     const total = await prisma.meal.count({ where })
     
+    console.log(`Found ${meals.length} meals out of ${total} total`)
+    
     return NextResponse.json({
       meals,
       pagination: {
@@ -127,7 +138,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Meal retrieval error:', error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     )
   }

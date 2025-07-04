@@ -83,6 +83,8 @@ export default function HomePage() {
 
   const handleMealLogged = async (entry: Omit<MealEntry, "id" | "timestamp">) => {
     try {
+      console.log('Attempting to log meal:', entry)
+      
       // Map frontend meal type to backend meal type
       const mealTypeMap: Record<string, string> = {
         breakfast: 'BREAKFAST',
@@ -93,14 +95,19 @@ export default function HomePage() {
       }
 
       const backendMealType = mealTypeMap[entry.type] || 'SNACK'
+      console.log('Mapped meal type:', { frontend: entry.type, backend: backendMealType })
 
       // Log meal to backend
+      console.log('Calling logMeal API...')
       const response = await logMeal({
         description: entry.description,
         mealType: backendMealType
       })
+      
+      console.log('API response:', response)
 
       if (response.meal) {
+        console.log('Meal saved successfully to database')
         // Create new entry from backend response
         const newEntry: MealEntry = {
           id: response.meal.id,
@@ -123,9 +130,17 @@ export default function HomePage() {
           // Add new entry to the beginning
           setMealEntries((prev) => [newEntry, ...prev])
         }
+      } else {
+        console.error('No meal data in API response:', response)
+        throw new Error('No meal data received from API')
       }
     } catch (error) {
       console.error('Error logging meal:', error)
+      console.error('Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      })
+      
       // Fallback to local state if API fails
       if (editingEntry) {
         const updatedEntry: MealEntry = {
