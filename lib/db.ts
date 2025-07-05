@@ -19,9 +19,34 @@ export interface CreateMealData {
   aiSummary?: string;
 }
 
+// In-memory database for local development
+let inMemoryMeals: Meal[] = [];
+let nextId = 1;
+
+// Check if we're in development and don't have Vercel Postgres env vars
+const isLocalDevelopment = process.env.NODE_ENV === 'development' && 
+  (!process.env.POSTGRES_URL && !process.env.POSTGRES_HOST);
+
 // Create a new meal
 export async function createMeal(data: CreateMealData): Promise<Meal> {
   try {
+    if (isLocalDevelopment) {
+      // Use in-memory database for local development
+      const meal: Meal = {
+        id: nextId.toString(),
+        description: data.description,
+        mealType: data.mealType,
+        estimatedCarbs: data.estimatedCarbs,
+        estimatedSugar: data.estimatedSugar,
+        aiSummary: data.aiSummary,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      inMemoryMeals.unshift(meal);
+      nextId++;
+      return meal;
+    }
+
     const result = await sql`
       INSERT INTO meals (description, meal_type, estimated_carbs, estimated_sugar, ai_summary, created_at, updated_at)
       VALUES (${data.description}, ${data.mealType}, ${data.estimatedCarbs}, ${data.estimatedSugar}, ${data.aiSummary || null}, NOW(), NOW())
@@ -48,6 +73,33 @@ export async function createMeal(data: CreateMealData): Promise<Meal> {
 // Get all meals with pagination
 export async function getMeals(page: number = 1, limit: number = 20, date?: string): Promise<{ meals: Meal[], pagination: any }> {
   try {
+    if (isLocalDevelopment) {
+      // Use in-memory database for local development
+      let filteredMeals = inMemoryMeals;
+      
+      if (date) {
+        const targetDate = new Date(date);
+        filteredMeals = inMemoryMeals.filter(meal => {
+          const mealDate = new Date(meal.createdAt);
+          return mealDate.toDateString() === targetDate.toDateString();
+        });
+      }
+      
+      const startIndex = (page - 1) * limit;
+      const endIndex = startIndex + limit;
+      const paginatedMeals = filteredMeals.slice(startIndex, endIndex);
+      
+      return {
+        meals: paginatedMeals,
+        pagination: {
+          page,
+          limit,
+          total: filteredMeals.length,
+          pages: Math.ceil(filteredMeals.length / limit)
+        }
+      };
+    }
+
     let result;
     let countResult;
     
@@ -106,6 +158,11 @@ export async function getMeals(page: number = 1, limit: number = 20, date?: stri
 // Get a single meal by ID
 export async function getMealById(id: string): Promise<Meal | null> {
   try {
+    if (isLocalDevelopment) {
+      // Use in-memory database for local development
+      return inMemoryMeals.find(meal => meal.id === id) || null;
+    }
+
     const result = await sql`
       SELECT * FROM meals WHERE id = ${id}
     `;
@@ -134,33 +191,22 @@ export async function getMealById(id: string): Promise<Meal | null> {
 // Update a meal
 export async function updateMeal(id: string, data: Partial<CreateMealData>): Promise<Meal> {
   try {
-    // Build update query dynamically
-    const updateParts: string[] = [];
-    const values: any[] = [];
-    
-    if (data.description !== undefined) {
-      updateParts.push('description = $1');
-      values.push(data.description);
+    if (isLocalDevelopment) {
+      // Use in-memory database for local development
+      const index = inMemoryMeals.findIndex(meal => meal.id === id);
+      if (index === -1) {
+        throw new Error('Meal not found');
+      }
+      
+      const updatedMeal = {
+        ...inMemoryMeals[index],
+        ...data,
+        updatedAt: new Date()
+      };
+      inMemoryMeals[index] = updatedMeal;
+      return updatedMeal;
     }
-    if (data.mealType !== undefined) {
-      updateParts.push('meal_type = $2');
-      values.push(data.mealType);
-    }
-    if (data.estimatedCarbs !== undefined) {
-      updateParts.push('estimated_carbs = $3');
-      values.push(data.estimatedCarbs);
-    }
-    if (data.estimatedSugar !== undefined) {
-      updateParts.push('estimated_sugar = $4');
-      values.push(data.estimatedSugar);
-    }
-    if (data.aiSummary !== undefined) {
-      updateParts.push('ai_summary = $5');
-      values.push(data.aiSummary);
-    }
-    
-    updateParts.push('updated_at = NOW()');
-    
+
     // For now, let's use a simpler approach - update all fields
     const result = await sql`
       UPDATE meals 
@@ -194,6 +240,15 @@ export async function updateMeal(id: string, data: Partial<CreateMealData>): Pro
 // Delete a meal
 export async function deleteMeal(id: string): Promise<void> {
   try {
+    if (isLocalDevelopment) {
+      // Use in-memory database for local development
+      const index = inMemoryMeals.findIndex(meal => meal.id === id);
+      if (index !== -1) {
+        inMemoryMeals.splice(index, 1);
+      }
+      return;
+    }
+
     await sql`
       DELETE FROM meals WHERE id = ${id}
     `;
@@ -206,6 +261,11 @@ export async function deleteMeal(id: string): Promise<void> {
 // Initialize database schema (run this once)
 export async function initializeDatabase(): Promise<void> {
   try {
+    if (isLocalDevelopment) {
+      console.log('Using in-memory database for local development');
+      return;
+    }
+
     await sql`
       CREATE TABLE IF NOT EXISTS meals (
         id SERIAL PRIMARY KEY,
