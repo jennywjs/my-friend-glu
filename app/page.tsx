@@ -63,7 +63,7 @@ export default function HomePage() {
         setMealEntries(formattedMeals)
       }
     } catch (error) {
-      console.error('Error fetching meals:', error)
+      console.error("Error fetching meals:", error)
       // Fallback to empty array if API fails
       setMealEntries([])
     } finally {
@@ -83,31 +83,31 @@ export default function HomePage() {
 
   const handleMealLogged = async (entry: Omit<MealEntry, "id" | "timestamp">) => {
     try {
-      console.log('Attempting to log meal:', entry)
-      
+      console.log("Attempting to log meal:", entry)
+
       // Map frontend meal type to backend meal type
       const mealTypeMap: Record<string, string> = {
-        breakfast: 'BREAKFAST',
-        brunch: 'LUNCH', // Map brunch to lunch for backend
-        lunch: 'LUNCH',
-        dinner: 'DINNER',
-        snack: 'SNACK'
+        breakfast: "BREAKFAST",
+        brunch: "LUNCH", // Map brunch to lunch for backend
+        lunch: "LUNCH",
+        dinner: "DINNER",
+        snack: "SNACK",
       }
 
-      const backendMealType = mealTypeMap[entry.type] || 'SNACK'
-      console.log('Mapped meal type:', { frontend: entry.type, backend: backendMealType })
+      const backendMealType = mealTypeMap[entry.type] || "SNACK"
+      console.log("Mapped meal type:", { frontend: entry.type, backend: backendMealType })
 
       // Log meal to backend
-      console.log('Calling logMeal API...')
+      console.log("Calling logMeal API...")
       const response = await logMeal({
         description: entry.description,
-        mealType: backendMealType
+        mealType: backendMealType,
       })
-      
-      console.log('API response:', response)
+
+      console.log("API response:", response)
 
       if (response.meal) {
-        console.log('Meal saved successfully to database')
+        console.log("Meal saved successfully to database")
         // Create new entry from backend response
         const newEntry: MealEntry = {
           id: response.meal.id,
@@ -116,7 +116,8 @@ export default function HomePage() {
           carbs: response.meal.estimatedCarbs,
           timestamp: new Date(response.meal.createdAt),
           aiSummary: response.meal.aiSummary || response.meal.description,
-          recommendation: response.recommendations?.[0] || "A gentle walk after eating could help balance your glucose levels.",
+          recommendation:
+            response.recommendations?.[0] || "A gentle walk after eating could help balance your glucose levels.",
           synthesizedSummary: response.meal.aiSummary || response.meal.description,
           ingredients: [response.meal.description],
           chatHistory: [],
@@ -131,16 +132,16 @@ export default function HomePage() {
           setMealEntries((prev) => [newEntry, ...prev])
         }
       } else {
-        console.error('No meal data in API response:', response)
-        throw new Error('No meal data received from API')
+        console.error("No meal data in API response:", response)
+        throw new Error("No meal data received from API")
       }
     } catch (error) {
-      console.error('Error logging meal:', error)
-      console.error('Error details:', {
-        message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined
+      console.error("Error logging meal:", error)
+      console.error("Error details:", {
+        message: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined,
       })
-      
+
       // Fallback to local state if API fails
       if (editingEntry) {
         const updatedEntry: MealEntry = {
@@ -211,153 +212,186 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-pink-50 via-white to-purple-50">
+    <div className="min-h-screen bg-gradient-to-br from-pink-50 to-purple-50">
       {/* Header */}
       <div className="bg-white shadow-sm border-b">
-        <div className="max-w-4xl mx-auto px-4 py-6">
+        <div className="max-w-md mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">My Friend Glu</h1>
-              <p className="text-gray-600 mt-1">Your AI-powered gestational diabetes companion</p>
+              <h1 className="text-xl font-semibold text-gray-900">My Friend Glu</h1>
+              <p className="text-sm text-gray-600">Hi Mato! Ready to log your meals?</p>
             </div>
-            <div className="flex items-center space-x-4">
-              <Button
-                onClick={() => handleLogMeal("food")}
-                className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white"
-              >
-                <MessageCircle className="h-4 w-4 mr-2" />
-                Log Meal
-              </Button>
+            <div className="text-right">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="text-sm font-medium flex items-center gap-1">
+                    Today
+                    <ChevronDown className="h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem>Today</DropdownMenuItem>
+                  <DropdownMenuItem>Last 3 days</DropdownMenuItem>
+                  <DropdownMenuItem>Last week</DropdownMenuItem>
+                  <DropdownMenuItem>Last month</DropdownMenuItem>
+                  <DropdownMenuItem>Last 3 months</DropdownMenuItem>
+                  <DropdownMenuItem>This year</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Today's Meals</p>
-                  <p className="text-2xl font-bold text-gray-900">{mealEntries.length}</p>
-                </div>
-                <Utensils className="h-8 w-8 text-pink-500" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Total Carbs</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {mealEntries.reduce((sum, meal) => sum + meal.carbs, 0)}g
+      <div className="max-w-md mx-auto px-4 py-6 pb-20">
+        {/* Daily Summary */}
+        <div className="bg-white rounded-lg shadow-sm border p-4 mb-4">
+          <div className="grid grid-cols-2 gap-4 mb-3">
+            <div className="text-center">
+              <p className="text-2xl font-bold text-gray-900">
+                {mealEntries.reduce((sum, entry) => sum + entry.carbs, 0)}g
+              </p>
+              <p className="text-xs text-gray-600">Total Carbs</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold text-gray-900">{mealEntries.length}</p>
+              <p className="text-xs text-gray-600">Food Entries</p>
+            </div>
+          </div>
+          <div className="text-center">
+            {(() => {
+              const totalCarbs = mealEntries.reduce((sum, entry) => sum + entry.carbs, 0)
+              const entryCount = mealEntries.length
+              if (totalCarbs < 150 && entryCount >= 4) {
+                return (
+                  <p className="text-sm text-green-700 bg-green-50 px-3 py-1 rounded-full">
+                    🎉 You're doing great! Keep it up!
                   </p>
-                </div>
-                <Coffee className="h-8 w-8 text-purple-500" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">AI Insights</p>
-                  <p className="text-2xl font-bold text-gray-900">{mealEntries.filter(m => m.aiSummary).length}</p>
-                </div>
-                <MessageCircle className="h-8 w-8 text-blue-500" />
-              </div>
-            </CardContent>
-          </Card>
+                )
+              } else if (totalCarbs > 200) {
+                return (
+                  <p className="text-sm text-orange-700 bg-orange-50 px-3 py-1 rounded-full">
+                    ⚠️ Consider reducing carb intake a little
+                  </p>
+                )
+              } else if (entryCount < 3) {
+                return (
+                  <p className="text-sm text-blue-700 bg-blue-50 px-3 py-1 rounded-full">
+                    📝 Try to log more meals for better tracking
+                  </p>
+                )
+              } else {
+                return (
+                  <p className="text-sm text-gray-700 bg-gray-50 px-3 py-1 rounded-full">
+                    👍 You're on the right track!
+                  </p>
+                )
+              }
+            })()}
+          </div>
         </div>
 
-        {/* Meal Timeline */}
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-gray-900">Today's Meals</h2>
-              {loading && <Loader2 className="h-5 w-5 animate-spin text-gray-500" />}
-            </div>
-            
-            {mealEntries.length === 0 && !loading ? (
-              <div className="text-center py-12">
-                <Utensils className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No meals logged yet</h3>
-                <p className="text-gray-600 mb-4">Start by logging your first meal to track your nutrition</p>
-                <Button
-                  onClick={() => handleLogMeal("food")}
-                  className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700"
-                >
-                  Log Your First Meal
-                </Button>
-              </div>
+        {/* Timeline Header */}
+        <div className="flex items-center gap-2 mb-4">
+          <Clock className="h-5 w-5 text-gray-600" />
+          <h2 className="text-lg font-semibold text-gray-900">Today's Timeline</h2>
+          {loading && <Loader2 className="h-4 w-4 animate-spin text-gray-500" />}
+        </div>
+
+        {/* Timeline */}
+        <ScrollArea className="h-[calc(100vh-380px)]">
+          <div className="space-y-3">
+            {mealEntries.length === 0 ? (
+              <Card className="border-dashed border-2 border-gray-200">
+                <CardContent className="flex flex-col items-center justify-center py-8">
+                  <MessageCircle className="h-12 w-12 text-gray-400 mb-3" />
+                  <p className="text-gray-600 text-center">
+                    No meals logged yet today.
+                    <br />
+                    Tap "Log Food" to get started!
+                  </p>
+                </CardContent>
+              </Card>
             ) : (
-              <ScrollArea className="h-[600px]">
-                <div className="space-y-4">
-                  {mealEntries.map((entry) => (
-                    <div
-                      key={entry.id}
-                      className="flex items-start space-x-4 p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow"
-                    >
-                      <div className="flex-shrink-0">
-                        <div className="w-10 h-10 bg-gradient-to-br from-pink-100 to-purple-100 rounded-full flex items-center justify-center">
-                          {getMealIcon(entry.type)}
-                        </div>
+              mealEntries.map((entry) => (
+                <Card key={entry.id} className="shadow-sm hover:shadow-md transition-shadow">
+                  <CardContent
+                    className="p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                    onClick={() => handleEditEntry(entry)}
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        {getMealIcon(entry.type)}
+                        <Badge className={getMealTypeColor(entry.type)}>
+                          {entry.type.charAt(0).toUpperCase() + entry.type.slice(1)}
+                        </Badge>
                       </div>
-                      
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center space-x-2">
-                            <Badge className={getMealTypeColor(entry.type)}>
-                              {entry.type.charAt(0).toUpperCase() + entry.type.slice(1)}
-                            </Badge>
-                            <span className="text-sm text-gray-500 flex items-center">
-                              <Clock className="h-3 w-3 mr-1" />
-                              {formatTime(entry.timestamp)}
-                            </span>
-                          </div>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm">
-                                <ChevronDown className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => handleEditEntry(entry)}>
-                                Edit
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                        
-                        <h3 className="font-medium text-gray-900 mb-1">{entry.description}</h3>
-                        <p className="text-sm text-gray-600 mb-2">{entry.synthesizedSummary}</p>
-                        
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-4 text-sm text-gray-500">
-                            <span className="flex items-center">
-                              <Coffee className="h-3 w-3 mr-1" />
-                              {entry.carbs}g carbs
-                            </span>
-                          </div>
-                          
-                          {entry.recommendation && (
-                            <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
-                              💡 {entry.recommendation}
-                            </div>
-                          )}
-                        </div>
+                      <div className="text-right">
+                        <p className="text-xs text-gray-500">{formatTime(entry.timestamp)}</p>
+                        <p className="text-sm font-semibold text-gray-900">{entry.carbs}g carbs</p>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </ScrollArea>
+
+                    <div className="mb-3">
+                      <p className="text-base text-gray-900 font-semibold mb-2">
+                        {entry.type === "breakfast" && entry.description.toLowerCase().includes("oatmeal")
+                          ? "Breakfast Bowl"
+                          : entry.type === "snack" && entry.description.toLowerCase().includes("apple")
+                            ? "Apple & Peanut Butter"
+                            : entry.description.toLowerCase().includes("kung pao")
+                              ? "Kung Pao Chicken Rice Combo"
+                              : entry.description.toLowerCase().includes("protein shake")
+                                ? "Protein Shake"
+                                : entry.description.toLowerCase().includes("sandwich")
+                                  ? "Sandwich"
+                                  : entry.description.toLowerCase().includes("salad")
+                                    ? "Fresh Salad"
+                                    : entry.description.toLowerCase().includes("pasta")
+                                      ? "Pasta Dish"
+                                      : entry.description.toLowerCase().includes("rice")
+                                        ? "Rice Bowl"
+                                        : entry.description.toLowerCase().includes("soup")
+                                          ? "Soup"
+                                          : entry.description.toLowerCase().includes("smoothie")
+                                            ? "Smoothie"
+                                            : `${entry.type.charAt(0).toUpperCase() + entry.type.slice(1)} Meal`}
+                      </p>
+                      <div className="bg-gray-50 rounded-lg p-3 mb-2">
+                        <p className="text-xs font-medium text-gray-700 mb-1">Ingredients:</p>
+                        <p className="text-xs text-gray-600 leading-relaxed">{entry.ingredients.join(", ")}</p>
+                      </div>
+                    </div>
+
+                    {entry.recommendation && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-2">
+                        <p className="text-xs text-blue-800">
+                          <span className="font-medium">💡 Tip:</span> {entry.recommendation}
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="mt-2 text-right">
+                      <p className="text-xs text-gray-400">Tap to edit</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </ScrollArea>
+      </div>
+
+      {/* Fixed Bottom Log Food Button */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg">
+        <div className="max-w-md mx-auto px-4 py-3">
+          <Button
+            onClick={() => handleLogMeal("food")}
+            className="w-full h-14 bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white shadow-lg flex items-center justify-center gap-3"
+          >
+            <Utensils className="h-5 w-5" />
+            <span className="text-lg font-semibold">Log Food</span>
+          </Button>
+        </div>
       </div>
     </div>
   )

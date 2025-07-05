@@ -50,32 +50,32 @@ Go to Vercel Dashboard → Your Project → Settings → Environment Variables a
 
 ### Local Development (.env file)
 Create a `.env` file in your project root:
-```env
+\`\`\`env
 DATABASE_URL="postgresql://default:password@host:port/verceldb"
 JWT_SECRET="1f5b908640cde97e66715effdfef761c6daf8f1de34a7c17620ae2e17de36345047bf265ca5675bb0e41c86ddae450d886a994f30752761cdeb87bce151e6d3b"
 OPENAI_API_KEY="your-openai-api-key"
-```
+\`\`\`
 
 ## Database Migration Steps
 
 ### 1. Generate Prisma Client
-```bash
+\`\`\`bash
 pnpm db:generate
-```
+\`\`\`
 
 ### 2. Create Initial Migration
-```bash
+\`\`\`bash
 pnpm db:migrate
-```
+\`\`\`
 
 ### 3. For Production Deployment
-```bash
+\`\`\`bash
 # Apply migrations to production database
 pnpm db:migrate:deploy
-```
+\`\`\`
 
 ## Deploy Commands
-```bash
+\`\`\`bash
 # Install dependencies
 pnpm install
 
@@ -84,7 +84,7 @@ pnpm db:generate
 
 # Deploy to Vercel
 vercel --prod
-```
+\`\`\`
 
 ## Post-Deployment Verification
 
@@ -127,4 +127,4 @@ After deployment:
 2. **Set environment variables in Vercel dashboard** (not in code)
 3. Run migrations: `pnpm db:migrate:deploy`
 4. Deploy your application
-5. Test all functionality in production 
+5. Test all functionality in production

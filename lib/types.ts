@@ -151,4 +151,4 @@ export interface DatabaseWhereClause {
     gte: Date
     lt: Date
   }
-} 
+}

@@ -33,4 +33,4 @@ export function extractTokenFromHeader(authHeader: string | undefined): string |
     return null
   }
   return authHeader.substring(7)
-} 
+}

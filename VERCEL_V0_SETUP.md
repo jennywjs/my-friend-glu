@@ -33,11 +33,11 @@ Vercel v0 doesn't support external Prisma databases, but we can use **Vercel Pos
 
 Set these in your Vercel project settings:
 
-```env
+\`\`\`env
 DATABASE_URL="postgresql://default:password@host:port/verceldb"
 JWT_SECRET="your-secure-jwt-secret"
 OPENAI_API_KEY="your-openai-api-key"
-```
+\`\`\`
 
 ### 4. Deploy with v0
 
@@ -54,13 +54,13 @@ OPENAI_API_KEY="your-openai-api-key"
 If you prefer to remove Prisma entirely:
 
 ### 1. Install Vercel Postgres
-```bash
+\`\`\`bash
 pnpm add @vercel/postgres
-```
+\`\`\`
 
 ### 2. Replace Prisma with Direct Queries
 
-```typescript
+\`\`\`typescript
 // lib/db.ts
 import { sql } from '@vercel/postgres';
 
@@ -80,11 +80,11 @@ export async function getMeals() {
   `;
   return result.rows;
 }
-```
+\`\`\`
 
 ### 3. Create Database Schema
 
-```sql
+\`\`\`sql
 -- Create tables manually in Vercel Postgres
 CREATE TABLE meals (
   id SERIAL PRIMARY KEY,
@@ -96,7 +96,7 @@ CREATE TABLE meals (
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
-```
+\`\`\`
 
 ## Migration Strategy
 
@@ -144,7 +144,7 @@ CREATE TABLE meals (
 
 ### Commands for Local Testing:
 
-```bash
+\`\`\`bash
 # Test database connection
 pnpm db:studio
 
@@ -153,7 +153,7 @@ pnpm db:push
 
 # Generate Prisma client
 pnpm db:generate
-```
+\`\`\`
 
 ## Next Steps
 
@@ -163,4 +163,4 @@ pnpm db:generate
 4. **Deploy to Vercel v0**
 5. **Test all functionality**
 
-The app will work perfectly with Vercel v0 using Vercel Postgres! 🚀 
+The app will work perfectly with Vercel v0 using Vercel Postgres! 🚀

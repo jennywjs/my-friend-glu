@@ -99,4 +99,4 @@ export async function aiAnalyze({ description, action = 'analyze' }: { descripti
     body: JSON.stringify({ description, action })
   });
   return res.json();
-} 
+}

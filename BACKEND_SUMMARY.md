@@ -91,7 +91,7 @@ I've successfully created a comprehensive backend API for the My Friend Glu appl
 
 ## 📁 File Structure
 
-```
+\`\`\`
 ├── prisma/
 │   └── schema.prisma          # Database schema
 ├── lib/
@@ -112,7 +112,7 @@ I've successfully created a comprehensive backend API for the My Friend Glu appl
 ├── test-api.js                # API testing script
 ├── BACKEND_README.md          # Comprehensive documentation
 └── BACKEND_SUMMARY.md         # This summary
-```
+\`\`\`
 
 ## 🔧 Setup & Installation
 
@@ -128,12 +128,12 @@ I've successfully created a comprehensive backend API for the My Friend Glu appl
 4. **Test the API**: `node test-api.js`
 
 ### Environment Variables Required
-```env
+\`\`\`env
 DATABASE_URL="file:./dev.db"
 JWT_SECRET="your-secure-jwt-secret"
 OPENAI_API_KEY="your-openai-api-key"
 NODE_ENV="development"
-```
+\`\`\`
 
 ## 🧪 Testing & Validation
 
@@ -162,17 +162,17 @@ All endpoints are documented in `BACKEND_README.md` with:
 ## 📊 Database Schema
 
 ### Users Table
-```sql
+\`\`\`sql
 - id: String (Primary Key)
 - email: String (Unique)
 - password: String (Hashed)
 - name: String
 - createdAt: DateTime
 - updatedAt: DateTime
-```
+\`\`\`
 
 ### Meals Table
-```sql
+\`\`\`sql
 - id: String (Primary Key)
 - userId: String (Foreign Key)
 - mealType: Enum (BREAKFAST/LUNCH/DINNER/SNACK)
@@ -182,7 +182,7 @@ All endpoints are documented in `BACKEND_README.md` with:
 - aiSummary: String (Optional)
 - createdAt: DateTime
 - updatedAt: DateTime
-```
+\`\`\`
 
 ## 🎯 PRD Requirements Fulfilled
 
@@ -245,4 +245,4 @@ All endpoints are documented in `BACKEND_README.md` with:
 - **Inline Code Comments**: Detailed code documentation
 - **TypeScript Types**: Self-documenting type definitions
 
-The backend is now ready to support the My Friend Glu mobile application with all the features specified in the PRD, providing a solid foundation for helping expecting mothers manage gestational diabetes through intelligent meal tracking. 
+The backend is now ready to support the My Friend Glu mobile application with all the features specified in the PRD, providing a solid foundation for helping expecting mothers manage gestational diabetes through intelligent meal tracking.

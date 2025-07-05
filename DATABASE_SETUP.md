@@ -19,7 +19,7 @@ This project now uses **Vercel Postgres** directly without Prisma for better com
 
 Set these in your Vercel project settings:
 
-```env
+\`\`\`env
 POSTGRES_URL="postgresql://default:password@host:port/verceldb"
 POSTGRES_HOST="your-host"
 POSTGRES_DATABASE="verceldb"
@@ -27,13 +27,13 @@ POSTGRES_USERNAME="default"
 POSTGRES_PASSWORD="your-password"
 JWT_SECRET="your-secure-jwt-secret"
 OPENAI_API_KEY="your-openai-api-key"
-```
+\`\`\`
 
 ### 3. Database Schema
 
 The database schema is automatically created when the app first runs. The `meals` table will be created with this structure:
 
-```sql
+\`\`\`sql
 CREATE TABLE meals (
   id SERIAL PRIMARY KEY,
   description TEXT NOT NULL,
@@ -44,7 +44,7 @@ CREATE TABLE meals (
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
-```
+\`\`\`
 
 ### 4. Deploy to Vercel v0
 
@@ -61,12 +61,12 @@ CREATE TABLE meals (
 
 ### Local Testing
 
-```bash
+\`\`\`bash
 # Start development server
 pnpm dev
 
 # The database will be automatically initialized when you make API calls
-```
+\`\`\`
 
 ## Database Functions
 
@@ -113,13 +113,13 @@ The app uses these database functions from `lib/db.ts`:
 
 ### Commands:
 
-```bash
+\`\`\`bash
 # Check database connection (in development)
 curl http://localhost:3000/api/meals
 
 # View logs in Vercel dashboard
 # Check Function Logs for any database errors
-```
+\`\`\`
 
 ## Next Steps
 
@@ -128,4 +128,4 @@ curl http://localhost:3000/api/meals
 3. ✅ **Deploy to Vercel v0**
 4. ✅ **Test meal logging functionality**
 
-The app is now fully compatible with Vercel v0! 🚀 
+The app is now fully compatible with Vercel v0! 🚀

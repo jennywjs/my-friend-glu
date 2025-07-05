@@ -31,7 +31,7 @@ The voice recognition feature has been successfully implemented according to the
 ### Components Created
 
 #### 1. `VoiceInput` Component (`components/voice-input.tsx`)
-```typescript
+\`\`\`typescript
 interface VoiceInputProps {
   onTranscript: (transcript: string) => void
   isListening: boolean
@@ -39,7 +39,7 @@ interface VoiceInputProps {
   disabled?: boolean
   className?: string
 }
-```
+\`\`\`
 
 **Features:**
 - Web Speech API integration
@@ -49,7 +49,7 @@ interface VoiceInputProps {
 - Accessibility considerations
 
 #### 2. `SpeechService` Class (`lib/speech.ts`)
-```typescript
+\`\`\`typescript
 class SpeechService {
   speak(text: string, options?: SpeechOptions): void
   stop(): void
@@ -58,7 +58,7 @@ class SpeechService {
   isSpeaking(): boolean
   getSupported(): boolean
 }
-```
+\`\`\`
 
 **Features:**
 - Speech synthesis management
@@ -105,26 +105,26 @@ class SpeechService {
 ## Configuration Options
 
 ### Voice Input Settings
-```typescript
+\`\`\`typescript
 // Speech recognition configuration
 recognition.continuous = true      // Continuous listening
 recognition.interimResults = true  // Show interim results
 recognition.lang = 'en-US'         // English language
 recognition.maxAlternatives = 1    // Single best result
-```
+\`\`\`
 
 ### Voice Output Settings
-```typescript
+\`\`\`typescript
 // Speech synthesis configuration
 utterance.rate = 0.9    // Slightly slower for clarity
 utterance.pitch = 1.0   // Normal pitch
 utterance.volume = 0.8  // 80% volume
-```
+\`\`\`
 
 ## API Integration
 
 ### Voice Input Integration
-```typescript
+\`\`\`typescript
 const handleVoiceTranscript = (transcript: string) => {
   setInputValue(transcript)
   // Auto-submit after voice input
@@ -136,10 +136,10 @@ const handleVoiceTranscript = (transcript: string) => {
     }
   }, 500)
 }
-```
+\`\`\`
 
 ### Voice Output Integration
-```typescript
+\`\`\`typescript
 const addMessage = (content: string, type: "user" | "ai") => {
   const newMessage: Message = { /* ... */ }
   setMessages((prev) => [...prev, newMessage])
@@ -151,26 +151,26 @@ const addMessage = (content: string, type: "user" | "ai") => {
   
   return newMessage
 }
-```
+\`\`\`
 
 ## Error Handling
 
 ### Common Issues and Solutions
 
 #### 1. Browser Not Supported
-```typescript
+\`\`\`typescript
 if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
   setError("Voice recognition is not supported in this browser")
 }
-```
+\`\`\`
 
 #### 2. Permission Denied
-```typescript
+\`\`\`typescript
 recognition.onerror = (event) => {
   setError(`Voice recognition error: ${event.error}`)
   setIsListening(false)
 }
-```
+\`\`\`
 
 #### 3. Network Issues
 - Graceful fallback to text input
@@ -186,13 +186,13 @@ recognition.onerror = (event) => {
 - **Efficient voice selection** algorithm
 
 ### Memory Management
-```typescript
+\`\`\`typescript
 useEffect(() => {
   return () => {
     stopSpeech() // Cleanup on unmount
   }
 }, [])
-```
+\`\`\`
 
 ## Security and Privacy
 
@@ -221,7 +221,7 @@ useEffect(() => {
 - [ ] Accessibility features work with screen readers
 
 ### Automated Testing
-```typescript
+\`\`\`typescript
 // Example test structure
 describe('VoiceInput Component', () => {
   it('should initialize speech recognition', () => {
@@ -236,7 +236,7 @@ describe('VoiceInput Component', () => {
     // Test fallback behavior
   })
 })
-```
+\`\`\`
 
 ## Future Enhancements
 
@@ -278,4 +278,4 @@ describe('VoiceInput Component', () => {
 
 The voice recognition feature has been successfully implemented according to the PRD requirements, providing a natural and accessible way for users to log meals. The dual voice input/output system creates a truly conversational experience that reduces friction for expecting mothers managing gestational diabetes.
 
-The implementation includes comprehensive error handling, browser compatibility, accessibility features, and performance optimizations to ensure a smooth user experience across different devices and browsers. 
+The implementation includes comprehensive error handling, browser compatibility, accessibility features, and performance optimizations to ensure a smooth user experience across different devices and browsers.

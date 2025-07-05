@@ -234,4 +234,4 @@ export default function VoiceInput({
       </div>
     </div>
   )
-} 
+}

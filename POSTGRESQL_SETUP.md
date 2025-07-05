@@ -38,58 +38,58 @@
 ## Environment Variables Setup
 
 ### Local Development (.env file)
-```env
+\`\`\`env
 # PostgreSQL Database URL
 DATABASE_URL="postgresql://username:password@host:port/database_name"
 
 # Other required variables
 JWT_SECRET="your-super-secret-jwt-key"
 OPENAI_API_KEY="your-openai-api-key"
-```
+\`\`\`
 
 ### Vercel Production
 Set these in Vercel Dashboard → Project Settings → Environment Variables:
-```
+\`\`\`
 DATABASE_URL=postgresql://username:password@host:port/database_name
 JWT_SECRET=your-super-secret-jwt-key
 OPENAI_API_KEY=your-openai-api-key
-```
+\`\`\`
 
 ## Database Migration Steps
 
 ### 1. Set up your database and get the connection string
 
 ### 2. Update your .env file with the PostgreSQL URL
-```env
+\`\`\`env
 DATABASE_URL="postgresql://username:password@host:port/database_name"
-```
+\`\`\`
 
 ### 3. Generate Prisma client
-```bash
+\`\`\`bash
 pnpm db:generate
-```
+\`\`\`
 
 ### 4. Create and apply migrations
-```bash
+\`\`\`bash
 # Create initial migration
 pnpm db:migrate
 
 # Or if you want to push schema directly (for development)
 pnpm db:push
-```
+\`\`\`
 
 ### 5. For production deployment
-```bash
+\`\`\`bash
 # Apply migrations to production database
 pnpm db:migrate:deploy
-```
+\`\`\`
 
 ## Connection String Format
 
 ### Standard PostgreSQL
-```
+\`\`\`
 postgresql://username:password@host:port/database_name
-```
+\`\`\`
 
 ### Examples:
 - **Local**: `postgresql://postgres:password@localhost:5432/myfriendglu`
@@ -108,9 +108,9 @@ postgresql://username:password@host:port/database_name
 
 ### SSL Configuration
 For cloud databases, you might need to add SSL parameters:
-```
+\`\`\`
 postgresql://username:password@host:port/database_name?sslmode=require
-```
+\`\`\`
 
 ## Quick Start with Vercel Postgres
 
@@ -136,17 +136,17 @@ postgresql://username:password@host:port/database_name?sslmode=require
 If you have existing data in SQLite:
 
 1. **Export data** (if needed):
-   ```bash
+   \`\`\`bash
    # Create a backup of your SQLite data
    cp prisma/dev.db prisma/backup.db
-   ```
+   \`\`\`
 
 2. **Set up PostgreSQL** following the steps above
 
 3. **Apply schema**:
-   ```bash
+   \`\`\`bash
    pnpm db:push
-   ```
+   \`\`\`
 
 4. **Import data** (if needed):
    - You'll need to write a migration script to transfer data
@@ -156,13 +156,13 @@ If you have existing data in SQLite:
 
 After setup, verify everything works:
 
-```bash
+\`\`\`bash
 # Check database connection
 pnpm db:studio
 
 # Test API endpoints
 curl http://localhost:3000/api/meals
-```
+\`\`\`
 
 ## Production Checklist
 
@@ -172,4 +172,4 @@ curl http://localhost:3000/api/meals
 - [ ] Migrations created and applied
 - [ ] Environment variables set in Vercel
 - [ ] Application deployed and tested
-- [ ] Database connection verified in production 
+- [ ] Database connection verified in production

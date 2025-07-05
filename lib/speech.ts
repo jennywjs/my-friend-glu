@@ -142,4 +142,4 @@ export const speakAIResponse = (text: string, autoSpeak: boolean = true) => {
 // Helper function to stop speech
 export const stopSpeech = () => {
   speechService.stop()
-} 
+}

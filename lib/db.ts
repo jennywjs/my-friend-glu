@@ -283,4 +283,4 @@ export async function initializeDatabase(): Promise<void> {
     console.error('Error initializing database:', error);
     throw new Error('Failed to initialize database');
   }
-} 
+}

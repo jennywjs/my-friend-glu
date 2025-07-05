@@ -4,11 +4,11 @@
   "private": true,
   "scripts": {
     "build": "next build",
+    "db:init": "node -e \"import('./lib/db.js').then(db => db.initializeDatabase())\"",
+    "db:setup": "echo 'Database setup is handled automatically by Vercel Postgres'",
     "dev": "next dev",
     "lint": "next lint",
-    "start": "next start",
-    "db:init": "node -e \"import('./lib/db.js').then(db => db.initializeDatabase())\"",
-    "db:setup": "echo 'Database setup is handled automatically by Vercel Postgres'"
+    "start": "next start"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
@@ -42,9 +42,9 @@
     "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.17",
     "@types/jsonwebtoken": "^9.0.5",
-    "@vercel/postgres": "^0.10.0",
+    "@vercel/postgres": "latest",
     "autoprefixer": "^10.4.20",
-    "bcryptjs": "^2.4.3",
+    "bcryptjs": "latest",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "latest",
@@ -54,11 +54,11 @@
     "express-rate-limit": "^7.1.5",
     "helmet": "^7.1.0",
     "input-otp": "latest",
-    "jsonwebtoken": "^9.0.2",
+    "jsonwebtoken": "latest",
     "lucide-react": "^0.454.0",
     "next": "15.2.4",
     "next-themes": "latest",
-    "openai": "^4.28.0",
+    "openai": "latest",
     "react": "^19",
     "react-day-picker": "latest",
     "react-dom": "^19",
@@ -69,6 +69,7 @@
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "latest",
+    "ws": "latest",
     "zod": "^3.24.1"
   },
   "devDependencies": {

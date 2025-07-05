@@ -22,17 +22,17 @@ This is the backend API for the My Friend Glu application, designed to help expe
 
 ### 1. Install Dependencies
 
-```bash
+\`\`\`bash
 npm install
 # or
 pnpm install
-```
+\`\`\`
 
 ### 2. Environment Configuration
 
 Create a `.env.local` file in the root directory with the following variables:
 
-```env
+\`\`\`env
 # Database
 DATABASE_URL="file:./dev.db"
 
@@ -44,11 +44,11 @@ OPENAI_API_KEY="your-openai-api-key-here"
 
 # App Configuration
 NODE_ENV="development"
-```
+\`\`\`
 
 ### 3. Database Setup
 
-```bash
+\`\`\`bash
 # Generate Prisma client
 npm run db:generate
 
@@ -57,13 +57,13 @@ npm run db:push
 
 # (Optional) Open Prisma Studio to view/edit data
 npm run db:studio
-```
+\`\`\`
 
 ### 4. Start Development Server
 
-```bash
+\`\`\`bash
 npm run dev
-```
+\`\`\`
 
 The API will be available at `http://localhost:3000/api/`
 
@@ -75,16 +75,16 @@ The API will be available at `http://localhost:3000/api/`
 Register a new user.
 
 **Request Body:**
-```json
+\`\`\`json
 {
   "email": "user@example.com",
   "password": "password123",
   "name": "Mato"
 }
-```
+\`\`\`
 
 **Response:**
-```json
+\`\`\`json
 {
   "message": "User registered successfully",
   "token": "jwt-token-here",
@@ -94,21 +94,21 @@ Register a new user.
     "name": "Mato"
   }
 }
-```
+\`\`\`
 
 #### POST `/api/auth/login`
 Login with existing credentials.
 
 **Request Body:**
-```json
+\`\`\`json
 {
   "email": "user@example.com",
   "password": "password123"
 }
-```
+\`\`\`
 
 **Response:**
-```json
+\`\`\`json
 {
   "message": "Login successful",
   "token": "jwt-token-here",
@@ -118,7 +118,7 @@ Login with existing credentials.
     "name": "Mato"
   }
 }
-```
+\`\`\`
 
 ### Meals
 
@@ -126,20 +126,20 @@ Login with existing credentials.
 Log a new meal with AI analysis.
 
 **Headers:**
-```
+\`\`\`
 Authorization: Bearer <jwt-token>
-```
+\`\`\`
 
 **Request Body:**
-```json
+\`\`\`json
 {
   "description": "Half plate Kung Pao chicken, 1 bok choy, 1 small bowl of rice, spicy and sour soup",
   "mealType": "LUNCH"
 }
-```
+\`\`\`
 
 **Response:**
-```json
+\`\`\`json
 {
   "message": "Meal logged successfully",
   "meal": {
@@ -156,15 +156,15 @@ Authorization: Bearer <jwt-token>
     "Monitor your blood glucose levels in the next 2 hours"
   ]
 }
-```
+\`\`\`
 
 #### GET `/api/meals`
 Retrieve meal history with pagination and filtering.
 
 **Headers:**
-```
+\`\`\`
 Authorization: Bearer <jwt-token>
-```
+\`\`\`
 
 **Query Parameters:**
 - `page` (optional): Page number (default: 1)
@@ -172,7 +172,7 @@ Authorization: Bearer <jwt-token>
 - `date` (optional): Filter by date (YYYY-MM-DD format)
 
 **Response:**
-```json
+\`\`\`json
 {
   "meals": [
     {
@@ -192,7 +192,7 @@ Authorization: Bearer <jwt-token>
     "pages": 3
   }
 }
-```
+\`\`\`
 
 ### AI Analysis
 
@@ -200,20 +200,20 @@ Authorization: Bearer <jwt-token>
 Analyze meal descriptions or generate clarifying questions.
 
 **Headers:**
-```
+\`\`\`
 Authorization: Bearer <jwt-token>
-```
+\`\`\`
 
 **Request Body:**
-```json
+\`\`\`json
 {
   "description": "Half plate Kung Pao chicken, 1 bok choy, 1 small bowl of rice",
   "action": "analyze" // or "clarify"
 }
-```
+\`\`\`
 
 **Response (analyze):**
-```json
+\`\`\`json
 {
   "action": "analyze",
   "analysis": {
@@ -225,10 +225,10 @@ Authorization: Bearer <jwt-token>
   "message": "Meal logged: Half plate Kung Pao chicken...",
   "recommendations": ["A gentle walk could help..."]
 }
-```
+\`\`\`
 
 **Response (clarify):**
-```json
+\`\`\`json
 {
   "action": "clarify",
   "questions": [
@@ -237,7 +237,7 @@ Authorization: Bearer <jwt-token>
   ],
   "message": "Here are some questions to help me better understand your meal:"
 }
-```
+\`\`\`
 
 ### User Profile
 
@@ -245,12 +245,12 @@ Authorization: Bearer <jwt-token>
 Get user profile information.
 
 **Headers:**
-```
+\`\`\`
 Authorization: Bearer <jwt-token>
-```
+\`\`\`
 
 **Response:**
-```json
+\`\`\`json
 {
   "user": {
     "id": "user-id",
@@ -260,25 +260,25 @@ Authorization: Bearer <jwt-token>
     "mealCount": 45
   }
 }
-```
+\`\`\`
 
 #### PUT `/api/user/profile`
 Update user profile.
 
 **Headers:**
-```
+\`\`\`
 Authorization: Bearer <jwt-token>
-```
+\`\`\`
 
 **Request Body:**
-```json
+\`\`\`json
 {
   "name": "New Name"
 }
-```
+\`\`\`
 
 **Response:**
-```json
+\`\`\`json
 {
   "message": "Profile updated successfully",
   "user": {
@@ -288,7 +288,7 @@ Authorization: Bearer <jwt-token>
     "createdAt": "2024-01-01T00:00:00Z"
   }
 }
-```
+\`\`\`
 
 ## Database Schema
 
@@ -369,4 +369,4 @@ The AI is specifically trained to handle:
 
 ## Support
 
-For questions or issues, please refer to the main project documentation or create an issue in the repository. 
+For questions or issues, please refer to the main project documentation or create an issue in the repository.
