@@ -1,18 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/db'
+import { createMeal, getMeals, initializeDatabase } from '@/lib/db'
 import { analyzeMeal } from '@/lib/ai-service'
 
 // POST - Log a new meal
 export async function POST(request: NextRequest) {
   try {
-    // Remove authentication for MVP deployability
-    // const authResult = await authenticateRequest(request)
-    // if ('error' in authResult) {
-    //   return NextResponse.json(
-    //     { error: authResult.error },
-    //     { status: authResult.status }
-    //   )
-    // }
+    // Initialize database schema if needed
+    await initializeDatabase()
     
     const body = await request.json()
     const { description, mealType } = body
@@ -33,15 +27,12 @@ export async function POST(request: NextRequest) {
     
     // Create meal record
     console.log('Creating meal record in database...')
-    const meal = await prisma.meal.create({
-      data: {
-        // userId: authResult.user.userId, // Remove userId for now
-        description,
-        mealType,
-        estimatedCarbs: analysis.estimatedCarbs,
-        estimatedSugar: analysis.estimatedSugar,
-        aiSummary: analysis.summary
-      }
+    const meal = await createMeal({
+      description,
+      mealType,
+      estimatedCarbs: analysis.estimatedCarbs,
+      estimatedSugar: analysis.estimatedSugar,
+      aiSummary: analysis.summary
     })
     
     console.log('Meal created successfully:', meal)
@@ -73,14 +64,8 @@ export async function POST(request: NextRequest) {
 // GET - Retrieve meal history
 export async function GET(request: NextRequest) {
   try {
-    // Remove authentication for MVP deployability
-    // const authResult = await authenticateRequest(request)
-    // if ('error' in authResult) {
-    //   return NextResponse.json(
-    //     { error: authResult.error },
-    //     { status: authResult.status }
-    //   )
-    // }
+    // Initialize database schema if needed
+    await initializeDatabase()
     
     const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get('page') || '1')
@@ -89,51 +74,11 @@ export async function GET(request: NextRequest) {
     
     console.log('Fetching meals with params:', { page, limit, date })
     
-    const skip = (page - 1) * limit
+    const result = await getMeals(page, limit, date || undefined)
     
-    // Build where clause
-    const where: any = {} // Remove userId filter for now
-    if (date) {
-      const startDate = new Date(date)
-      const endDate = new Date(date)
-      endDate.setDate(endDate.getDate() + 1)
-      where.createdAt = {
-        gte: startDate,
-        lt: endDate
-      }
-    }
+    console.log(`Found ${result.meals.length} meals out of ${result.pagination.total} total`)
     
-    // Get meals with pagination
-    const meals = await prisma.meal.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      skip,
-      take: limit,
-      select: {
-        id: true,
-        description: true,
-        mealType: true,
-        estimatedCarbs: true,
-        estimatedSugar: true,
-        aiSummary: true,
-        createdAt: true
-      }
-    })
-    
-    // Get total count
-    const total = await prisma.meal.count({ where })
-    
-    console.log(`Found ${meals.length} meals out of ${total} total`)
-    
-    return NextResponse.json({
-      meals,
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit)
-      }
-    })
+    return NextResponse.json(result)
     
   } catch (error) {
     console.error('Meal retrieval error:', error)

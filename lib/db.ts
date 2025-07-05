@@ -1,11 +1,226 @@
-import { PrismaClient } from '@prisma/client'
+import { sql } from '@vercel/postgres';
 
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined
+export interface Meal {
+  id: string;
+  description: string;
+  mealType: string;
+  estimatedCarbs: number;
+  estimatedSugar: number;
+  aiSummary?: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
-export const prisma = globalForPrisma.prisma ?? new PrismaClient({
-  log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-})
+export interface CreateMealData {
+  description: string;
+  mealType: string;
+  estimatedCarbs: number;
+  estimatedSugar: number;
+  aiSummary?: string;
+}
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma 
+// Create a new meal
+export async function createMeal(data: CreateMealData): Promise<Meal> {
+  try {
+    const result = await sql`
+      INSERT INTO meals (description, meal_type, estimated_carbs, estimated_sugar, ai_summary, created_at, updated_at)
+      VALUES (${data.description}, ${data.mealType}, ${data.estimatedCarbs}, ${data.estimatedSugar}, ${data.aiSummary || null}, NOW(), NOW())
+      RETURNING *
+    `;
+    
+    const meal = result.rows[0];
+    return {
+      id: meal.id,
+      description: meal.description,
+      mealType: meal.meal_type,
+      estimatedCarbs: parseFloat(meal.estimated_carbs),
+      estimatedSugar: parseFloat(meal.estimated_sugar),
+      aiSummary: meal.ai_summary,
+      createdAt: new Date(meal.created_at),
+      updatedAt: new Date(meal.updated_at)
+    };
+  } catch (error) {
+    console.error('Error creating meal:', error);
+    throw new Error('Failed to create meal');
+  }
+}
+
+// Get all meals with pagination
+export async function getMeals(page: number = 1, limit: number = 20, date?: string): Promise<{ meals: Meal[], pagination: any }> {
+  try {
+    let result;
+    let countResult;
+    
+    if (date) {
+      result = await sql`
+        SELECT * FROM meals 
+        WHERE DATE(created_at) = ${date}
+        ORDER BY created_at DESC 
+        LIMIT ${limit} OFFSET ${(page - 1) * limit}
+      `;
+      
+      countResult = await sql`
+        SELECT COUNT(*) as total FROM meals 
+        WHERE DATE(created_at) = ${date}
+      `;
+    } else {
+      result = await sql`
+        SELECT * FROM meals 
+        ORDER BY created_at DESC 
+        LIMIT ${limit} OFFSET ${(page - 1) * limit}
+      `;
+      
+      countResult = await sql`
+        SELECT COUNT(*) as total FROM meals
+      `;
+    }
+    
+    const total = parseInt(countResult.rows[0].total);
+    
+    const meals = result.rows.map(meal => ({
+      id: meal.id,
+      description: meal.description,
+      mealType: meal.meal_type,
+      estimatedCarbs: parseFloat(meal.estimated_carbs),
+      estimatedSugar: parseFloat(meal.estimated_sugar),
+      aiSummary: meal.ai_summary,
+      createdAt: new Date(meal.created_at),
+      updatedAt: new Date(meal.updated_at)
+    }));
+    
+    return {
+      meals,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit)
+      }
+    };
+  } catch (error) {
+    console.error('Error fetching meals:', error);
+    throw new Error('Failed to fetch meals');
+  }
+}
+
+// Get a single meal by ID
+export async function getMealById(id: string): Promise<Meal | null> {
+  try {
+    const result = await sql`
+      SELECT * FROM meals WHERE id = ${id}
+    `;
+    
+    if (result.rows.length === 0) {
+      return null;
+    }
+    
+    const meal = result.rows[0];
+    return {
+      id: meal.id,
+      description: meal.description,
+      mealType: meal.meal_type,
+      estimatedCarbs: parseFloat(meal.estimated_carbs),
+      estimatedSugar: parseFloat(meal.estimated_sugar),
+      aiSummary: meal.ai_summary,
+      createdAt: new Date(meal.created_at),
+      updatedAt: new Date(meal.updated_at)
+    };
+  } catch (error) {
+    console.error('Error fetching meal:', error);
+    throw new Error('Failed to fetch meal');
+  }
+}
+
+// Update a meal
+export async function updateMeal(id: string, data: Partial<CreateMealData>): Promise<Meal> {
+  try {
+    // Build update query dynamically
+    const updateParts: string[] = [];
+    const values: any[] = [];
+    
+    if (data.description !== undefined) {
+      updateParts.push('description = $1');
+      values.push(data.description);
+    }
+    if (data.mealType !== undefined) {
+      updateParts.push('meal_type = $2');
+      values.push(data.mealType);
+    }
+    if (data.estimatedCarbs !== undefined) {
+      updateParts.push('estimated_carbs = $3');
+      values.push(data.estimatedCarbs);
+    }
+    if (data.estimatedSugar !== undefined) {
+      updateParts.push('estimated_sugar = $4');
+      values.push(data.estimatedSugar);
+    }
+    if (data.aiSummary !== undefined) {
+      updateParts.push('ai_summary = $5');
+      values.push(data.aiSummary);
+    }
+    
+    updateParts.push('updated_at = NOW()');
+    
+    // For now, let's use a simpler approach - update all fields
+    const result = await sql`
+      UPDATE meals 
+      SET description = ${data.description || ''}, 
+          meal_type = ${data.mealType || ''}, 
+          estimated_carbs = ${data.estimatedCarbs || 0}, 
+          estimated_sugar = ${data.estimatedSugar || 0}, 
+          ai_summary = ${data.aiSummary || null}, 
+          updated_at = NOW()
+      WHERE id = ${id}
+      RETURNING *
+    `;
+    
+    const meal = result.rows[0];
+    return {
+      id: meal.id,
+      description: meal.description,
+      mealType: meal.meal_type,
+      estimatedCarbs: parseFloat(meal.estimated_carbs),
+      estimatedSugar: parseFloat(meal.estimated_sugar),
+      aiSummary: meal.ai_summary,
+      createdAt: new Date(meal.created_at),
+      updatedAt: new Date(meal.updated_at)
+    };
+  } catch (error) {
+    console.error('Error updating meal:', error);
+    throw new Error('Failed to update meal');
+  }
+}
+
+// Delete a meal
+export async function deleteMeal(id: string): Promise<void> {
+  try {
+    await sql`
+      DELETE FROM meals WHERE id = ${id}
+    `;
+  } catch (error) {
+    console.error('Error deleting meal:', error);
+    throw new Error('Failed to delete meal');
+  }
+}
+
+// Initialize database schema (run this once)
+export async function initializeDatabase(): Promise<void> {
+  try {
+    await sql`
+      CREATE TABLE IF NOT EXISTS meals (
+        id SERIAL PRIMARY KEY,
+        description TEXT NOT NULL,
+        meal_type VARCHAR(20) NOT NULL,
+        estimated_carbs FLOAT NOT NULL,
+        estimated_sugar FLOAT DEFAULT 0,
+        ai_summary TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `;
+    console.log('Database schema initialized successfully');
+  } catch (error) {
+    console.error('Error initializing database:', error);
+    throw new Error('Failed to initialize database');
+  }
+} 
