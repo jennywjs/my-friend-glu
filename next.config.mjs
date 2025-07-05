@@ -12,9 +12,7 @@ const nextConfig = {
   // Ensure proper static generation
   output: 'standalone',
   // Handle Prisma client generation
-  experimental: {
-    serverComponentsExternalPackages: []
-  }
+  serverExternalPackages: ['@prisma/client']
 }
 
 export default nextConfig

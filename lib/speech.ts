@@ -11,13 +11,29 @@ class SpeechService {
   private synthesis: SpeechSynthesis | null = null
   private voices: SpeechSynthesisVoice[] = []
   private isSupported: boolean = false
+  private initialized: boolean = false
 
   constructor() {
+    // Don't initialize immediately - wait until first use
+  }
+
+  private initialize() {
+    if (this.initialized) return
+    
+    // Check if we're in a browser environment
+    if (typeof window === "undefined") {
+      this.isSupported = false
+      this.initialized = true
+      return
+    }
+
     if ('speechSynthesis' in window) {
       this.synthesis = window.speechSynthesis
       this.isSupported = true
       this.loadVoices()
     }
+    
+    this.initialized = true
   }
 
   private loadVoices() {
@@ -53,6 +69,8 @@ class SpeechService {
   }
 
   speak(text: string, options: SpeechOptions = {}) {
+    this.initialize()
+    
     if (!this.isSupported || !this.synthesis) {
       console.warn('Speech synthesis not supported')
       return
@@ -91,32 +109,38 @@ class SpeechService {
   }
 
   stop() {
+    this.initialize()
     if (this.synthesis) {
       this.synthesis.cancel()
     }
   }
 
   pause() {
+    this.initialize()
     if (this.synthesis) {
       this.synthesis.pause()
     }
   }
 
   resume() {
+    this.initialize()
     if (this.synthesis) {
       this.synthesis.resume()
     }
   }
 
   isSpeaking(): boolean {
+    this.initialize()
     return this.synthesis ? this.synthesis.speaking : false
   }
 
   getSupportedVoices(): SpeechSynthesisVoice[] {
+    this.initialize()
     return this.voices
   }
 
   getSupported(): boolean {
+    this.initialize()
     return this.isSupported
   }
 }

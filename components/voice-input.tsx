@@ -76,6 +76,9 @@ export default function VoiceInput({
   const recognitionRef = useRef<SpeechRecognition | null>(null)
 
   useEffect(() => {
+    // Check if we're in the browser environment
+    if (typeof window === "undefined") return
+
     // Check if Web Speech API is supported
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       setIsSupported(true)
@@ -93,6 +96,9 @@ export default function VoiceInput({
 
   const initializeSpeechRecognition = () => {
     try {
+      // Ensure we're in the browser environment
+      if (typeof window === "undefined") return
+
       // Use the appropriate SpeechRecognition constructor
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
       const recognition = new SpeechRecognition()
