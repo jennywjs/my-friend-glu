@@ -1,4 +1,13 @@
-import { sql } from "@vercel/postgres"
+// Conditional import - only import @vercel/postgres if DATABASE_URL is available
+let sql: any = null;
+if (process.env.DATABASE_URL || process.env.POSTGRES_URL) {
+  try {
+    const { sql: pgSql } = require("@vercel/postgres");
+    sql = pgSql;
+  } catch (error) {
+    console.warn("Failed to import @vercel/postgres, falling back to in-memory storage");
+  }
+}
 
 export interface Meal {
   id: string
@@ -24,8 +33,8 @@ const inMemoryMeals: Meal[] = []
 let nextId = 1
 
 // ---------- Choose storage ----------
-// Use the in-memory store whenever Postgres env vars are missing
-const useInMemoryStore = !process.env.POSTGRES_URL && !process.env.POSTGRES_HOST
+// Use the in-memory store whenever Postgres env vars are missing or sql import failed
+const useInMemoryStore = !process.env.POSTGRES_URL && !process.env.DATABASE_URL || !sql
 
 // Create a new meal
 export async function createMeal(data: CreateMealData): Promise<Meal> {
