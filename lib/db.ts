@@ -1,5 +1,9 @@
 import { sql } from "@vercel/postgres"
 
+/* ------------------------------------------------------------------ */
+/*  Types                                                             */
+/* ------------------------------------------------------------------ */
+
 export interface Meal {
   id: string
   description: string
@@ -19,257 +23,226 @@ export interface CreateMealData {
   aiSummary?: string
 }
 
-// In-memory database for local development
-const inMemoryMeals: Meal[] = []
+/* ------------------------------------------------------------------ */
+/*  In-memory fallback store                                          */
+/* ------------------------------------------------------------------ */
+
+const memMeals: Meal[] = []
 let nextId = 1
 
-// ---------- Choose storage ----------
-// Use the in-memory store whenever Postgres env vars are missing
-const useInMemoryStore = !process.env.POSTGRES_URL && !process.env.POSTGRES_HOST
+/* ------------------------------------------------------------------ */
+/*  Fallback logic                                                    */
+/* ------------------------------------------------------------------ */
 
-// Create a new meal
-export async function createMeal(data: CreateMealData): Promise<Meal> {
-  try {
-    if (useInMemoryStore) {
-      console.log("createMeal ➜ in-memory")
-      // Use in-memory database for local development
-      const meal: Meal = {
-        id: nextId.toString(),
-        description: data.description,
-        mealType: data.mealType,
-        estimatedCarbs: data.estimatedCarbs,
-        estimatedSugar: data.estimatedSugar,
-        aiSummary: data.aiSummary,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }
-      inMemoryMeals.unshift(meal)
-      nextId++
-      return meal
-    }
+/**
+ * When TRUE all subsequent operations use the in-memory store.
+ * We start in “unknown” mode and switch forever on first Postgres failure.
+ */
+let forceMemory = false
 
-    const result = await sql`
-      INSERT INTO meals (description, meal_type, estimated_carbs, estimated_sugar, ai_summary, created_at, updated_at)
-      VALUES (${data.description}, ${data.mealType}, ${data.estimatedCarbs}, ${data.estimatedSugar}, ${data.aiSummary || null}, NOW(), NOW())
-      RETURNING *
-    `
+function shouldUseMemory() {
+  // If we have no Postgres env vars or we blew up once, use memory.
+  if (forceMemory) return true
+  return !process.env.POSTGRES_URL && !process.env.POSTGRES_HOST
+}
 
-    const meal = result.rows[0]
-    return {
-      id: meal.id,
-      description: meal.description,
-      mealType: meal.meal_type,
-      estimatedCarbs: Number.parseFloat(meal.estimated_carbs),
-      estimatedSugar: Number.parseFloat(meal.estimated_sugar),
-      aiSummary: meal.ai_summary,
-      createdAt: new Date(meal.created_at),
-      updatedAt: new Date(meal.updated_at),
-    }
-  } catch (error) {
-    console.error("Error creating meal:", error)
-    throw new Error("Failed to create meal")
+/* ------------------------------------------------------------------ */
+/*  Helpers                                                           */
+/* ------------------------------------------------------------------ */
+
+function memCreate(data: CreateMealData): Meal {
+  const meal: Meal = {
+    id: (nextId++).toString(),
+    description: data.description,
+    mealType: data.mealType,
+    estimatedCarbs: data.estimatedCarbs,
+    estimatedSugar: data.estimatedSugar,
+    aiSummary: data.aiSummary,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  }
+  memMeals.unshift(meal)
+  return meal
+}
+
+function memPaginate(page: number, limit: number, date?: string) {
+  let meals = memMeals
+  if (date) {
+    const target = new Date(date).toDateString()
+    meals = meals.filter((m) => new Date(m.createdAt).toDateString() === target)
+  }
+  const start = (page - 1) * limit
+  const slice = meals.slice(start, start + limit)
+  return {
+    meals: slice,
+    pagination: {
+      page,
+      limit,
+      total: meals.length,
+      pages: Math.ceil(meals.length / limit),
+    },
   }
 }
 
-// Get all meals with pagination
-export async function getMeals(page = 1, limit = 20, date?: string): Promise<{ meals: Meal[]; pagination: any }> {
+/* ------------------------------------------------------------------ */
+/*  Public API                                                        */
+/* ------------------------------------------------------------------ */
+
+export async function createMeal(data: CreateMealData): Promise<Meal> {
+  if (shouldUseMemory()) return memCreate(data)
+
   try {
-    if (useInMemoryStore) {
-      console.log("getMeals ➜ in-memory")
-      // Use in-memory database for local development
-      let filteredMeals = inMemoryMeals
-
-      if (date) {
-        const targetDate = new Date(date)
-        filteredMeals = inMemoryMeals.filter((meal) => {
-          const mealDate = new Date(meal.createdAt)
-          return mealDate.toDateString() === targetDate.toDateString()
-        })
-      }
-
-      const startIndex = (page - 1) * limit
-      const endIndex = startIndex + limit
-      const paginatedMeals = filteredMeals.slice(startIndex, endIndex)
-
-      return {
-        meals: paginatedMeals,
-        pagination: {
-          page,
-          limit,
-          total: filteredMeals.length,
-          pages: Math.ceil(filteredMeals.length / limit),
-        },
-      }
+    const result = await sql`
+      INSERT INTO meals (description, meal_type, estimated_carbs, estimated_sugar, ai_summary, created_at, updated_at)
+      VALUES (${data.description}, ${data.mealType}, ${data.estimatedCarbs}, ${data.estimatedSugar},
+              ${data.aiSummary || null}, NOW(), NOW())
+      RETURNING *
+    `
+    const r = result.rows[0]
+    return {
+      id: r.id,
+      description: r.description,
+      mealType: r.meal_type,
+      estimatedCarbs: Number(r.estimated_carbs),
+      estimatedSugar: Number(r.estimated_sugar),
+      aiSummary: r.ai_summary,
+      createdAt: new Date(r.created_at),
+      updatedAt: new Date(r.updated_at),
     }
+  } catch (err) {
+    console.error("Postgres unavailable, switching to in-memory store:", err)
+    forceMemory = true
+    return memCreate(data)
+  }
+}
 
-    let result
-    let countResult
+export async function getMeals(page = 1, limit = 20, date?: string) {
+  if (shouldUseMemory()) return memPaginate(page, limit, date)
 
-    if (date) {
-      result = await sql`
-        SELECT * FROM meals 
-        WHERE DATE(created_at) = ${date}
-        ORDER BY created_at DESC 
-        LIMIT ${limit} OFFSET ${(page - 1) * limit}
-      `
-
-      countResult = await sql`
-        SELECT COUNT(*) as total FROM meals 
-        WHERE DATE(created_at) = ${date}
-      `
-    } else {
-      result = await sql`
-        SELECT * FROM meals 
-        ORDER BY created_at DESC 
-        LIMIT ${limit} OFFSET ${(page - 1) * limit}
-      `
-
-      countResult = await sql`
-        SELECT COUNT(*) as total FROM meals
-      `
-    }
-
-    const total = Number.parseInt(countResult.rows[0].total)
-
-    const meals = result.rows.map((meal) => ({
-      id: meal.id,
-      description: meal.description,
-      mealType: meal.meal_type,
-      estimatedCarbs: Number.parseFloat(meal.estimated_carbs),
-      estimatedSugar: Number.parseFloat(meal.estimated_sugar),
-      aiSummary: meal.ai_summary,
-      createdAt: new Date(meal.created_at),
-      updatedAt: new Date(meal.updated_at),
+  try {
+    const whereDate = date ? sql`WHERE DATE(created_at) = ${date}` : sql``
+    const result = await sql`
+      SELECT * FROM meals
+      ${whereDate}
+      ORDER BY created_at DESC
+      LIMIT ${limit} OFFSET ${(page - 1) * limit}
+    `
+    const count = await sql`
+      SELECT COUNT(*) AS total FROM meals ${whereDate}
+    `
+    const meals = result.rows.map((m) => ({
+      id: m.id,
+      description: m.description,
+      mealType: m.meal_type,
+      estimatedCarbs: Number(m.estimated_carbs),
+      estimatedSugar: Number(m.estimated_sugar),
+      aiSummary: m.ai_summary,
+      createdAt: new Date(m.created_at),
+      updatedAt: new Date(m.updated_at),
     }))
-
     return {
       meals,
       pagination: {
         page,
         limit,
-        total,
-        pages: Math.ceil(total / limit),
+        total: Number(count.rows[0].total),
+        pages: Math.ceil(Number(count.rows[0].total) / limit),
       },
     }
-  } catch (error) {
-    console.error("Error fetching meals:", error)
-    throw new Error("Failed to fetch meals")
+  } catch (err) {
+    console.error("Postgres unavailable, switching to in-memory store:", err)
+    forceMemory = true
+    return memPaginate(page, limit, date)
   }
 }
 
-// Get a single meal by ID
 export async function getMealById(id: string): Promise<Meal | null> {
+  if (shouldUseMemory()) return memMeals.find((m) => m.id === id) || null
+
   try {
-    if (useInMemoryStore) {
-      console.log("getMealById ➜ in-memory")
-      // Use in-memory database for local development
-      return inMemoryMeals.find((meal) => meal.id === id) || null
-    }
-
-    const result = await sql`
-      SELECT * FROM meals WHERE id = ${id}
-    `
-
-    if (result.rows.length === 0) {
-      return null
-    }
-
-    const meal = result.rows[0]
+    const result = await sql`SELECT * FROM meals WHERE id = ${id}`
+    if (!result.rows.length) return null
+    const m = result.rows[0]
     return {
-      id: meal.id,
-      description: meal.description,
-      mealType: meal.meal_type,
-      estimatedCarbs: Number.parseFloat(meal.estimated_carbs),
-      estimatedSugar: Number.parseFloat(meal.estimated_sugar),
-      aiSummary: meal.ai_summary,
-      createdAt: new Date(meal.created_at),
-      updatedAt: new Date(meal.updated_at),
+      id: m.id,
+      description: m.description,
+      mealType: m.meal_type,
+      estimatedCarbs: Number(m.estimated_carbs),
+      estimatedSugar: Number(m.estimated_sugar),
+      aiSummary: m.ai_summary,
+      createdAt: new Date(m.created_at),
+      updatedAt: new Date(m.updated_at),
     }
-  } catch (error) {
-    console.error("Error fetching meal:", error)
-    throw new Error("Failed to fetch meal")
+  } catch (err) {
+    console.error("Postgres unavailable, switching to in-memory store:", err)
+    forceMemory = true
+    return memMeals.find((m) => m.id === id) || null
   }
 }
 
-// Update a meal
 export async function updateMeal(id: string, data: Partial<CreateMealData>): Promise<Meal> {
+  if (shouldUseMemory()) {
+    const idx = memMeals.findIndex((m) => m.id === id)
+    if (idx === -1) throw new Error("Meal not found")
+    memMeals[idx] = { ...memMeals[idx], ...data, updatedAt: new Date() }
+    return memMeals[idx]
+  }
+
   try {
-    if (useInMemoryStore) {
-      console.log("updateMeal ➜ in-memory")
-      // Use in-memory database for local development
-      const index = inMemoryMeals.findIndex((meal) => meal.id === id)
-      if (index === -1) {
-        throw new Error("Meal not found")
-      }
-
-      const updatedMeal = {
-        ...inMemoryMeals[index],
-        ...data,
-        updatedAt: new Date(),
-      }
-      inMemoryMeals[index] = updatedMeal
-      return updatedMeal
-    }
-
-    // For now, let's use a simpler approach - update all fields
     const result = await sql`
-      UPDATE meals 
-      SET description = ${data.description || ""}, 
-          meal_type = ${data.mealType || ""}, 
-          estimated_carbs = ${data.estimatedCarbs || 0}, 
-          estimated_sugar = ${data.estimatedSugar || 0}, 
-          ai_summary = ${data.aiSummary || null}, 
-          updated_at = NOW()
+      UPDATE meals
+      SET description     = ${data.description ?? sql`description`},
+          meal_type       = ${data.mealType ?? sql`meal_type`},
+          estimated_carbs = ${data.estimatedCarbs ?? sql`estimated_carbs`},
+          estimated_sugar = ${data.estimatedSugar ?? sql`estimated_sugar`},
+          ai_summary      = ${data.aiSummary ?? sql`ai_summary`},
+          updated_at      = NOW()
       WHERE id = ${id}
       RETURNING *
     `
-
-    const meal = result.rows[0]
+    const m = result.rows[0]
     return {
-      id: meal.id,
-      description: meal.description,
-      mealType: meal.meal_type,
-      estimatedCarbs: Number.parseFloat(meal.estimated_carbs),
-      estimatedSugar: Number.parseFloat(meal.estimated_sugar),
-      aiSummary: meal.ai_summary,
-      createdAt: new Date(meal.created_at),
-      updatedAt: new Date(meal.updated_at),
+      id: m.id,
+      description: m.description,
+      mealType: m.meal_type,
+      estimatedCarbs: Number(m.estimated_carbs),
+      estimatedSugar: Number(m.estimated_sugar),
+      aiSummary: m.ai_summary,
+      createdAt: new Date(m.created_at),
+      updatedAt: new Date(m.updated_at),
     }
-  } catch (error) {
-    console.error("Error updating meal:", error)
-    throw new Error("Failed to update meal")
+  } catch (err) {
+    console.error("Postgres unavailable, switching to in-memory store:", err)
+    forceMemory = true
+    return updateMeal(id, data) // retry with memory
   }
 }
 
-// Delete a meal
 export async function deleteMeal(id: string): Promise<void> {
-  try {
-    if (useInMemoryStore) {
-      console.log("deleteMeal ➜ in-memory")
-      // Use in-memory database for local development
-      const index = inMemoryMeals.findIndex((meal) => meal.id === id)
-      if (index !== -1) {
-        inMemoryMeals.splice(index, 1)
-      }
-      return
-    }
-
-    await sql`
-      DELETE FROM meals WHERE id = ${id}
-    `
-  } catch (error) {
-    console.error("Error deleting meal:", error)
-    throw new Error("Failed to delete meal")
-  }
-}
-
-// Initialize database schema (run this once)
-export async function initializeDatabase(): Promise<void> {
-  if (useInMemoryStore) {
-    console.log("🗄️  Using in-memory database (no Postgres env vars found)")
+  if (shouldUseMemory()) {
+    const idx = memMeals.findIndex((m) => m.id === id)
+    if (idx !== -1) memMeals.splice(idx, 1)
     return
   }
 
+  try {
+    await sql`DELETE FROM meals WHERE id = ${id}`
+  } catch (err) {
+    console.error("Postgres unavailable, switching to in-memory store:", err)
+    forceMemory = true
+    return deleteMeal(id) // retry with memory
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  No-op initialise (optional)                                       */
+/* ------------------------------------------------------------------ */
+
+export async function initializeDatabase() {
+  if (shouldUseMemory()) {
+    console.log("🗄️  Using in-memory store – no Postgres or connection failed")
+    return
+  }
   try {
     await sql`
       CREATE TABLE IF NOT EXISTS meals (
@@ -283,9 +256,9 @@ export async function initializeDatabase(): Promise<void> {
         updated_at TIMESTAMP DEFAULT NOW()
       )
     `
-    console.log("Database schema initialized successfully")
-  } catch (error) {
-    console.error("Error initializing database:", error)
-    throw new Error("Failed to initialize database")
+    console.log("Postgres schema OK")
+  } catch (err) {
+    console.error("Could not init Postgres – switching to memory store:", err)
+    forceMemory = true
   }
 }
