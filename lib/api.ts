@@ -94,28 +94,58 @@ export async function updateProfile({ name }: { name: string }) {
 }
 
 export async function logMeal({ description, mealType }: { description: string; mealType: string }) {
-  const res = await fetch(`${API_BASE}/meals`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders() },
-    body: JSON.stringify({ description, mealType }),
-  })
+  try {
+    const res = await fetch(`${API_BASE}/meals`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ description, mealType }),
+    })
 
-  const data = await parseJSONSafe(res)
-  assertOk(res, data)
-  return data
+    const data = await parseJSONSafe(res)
+
+    if (!res.ok) {
+      console.error("logMeal backend error:", data)
+      return { error: typeof data === "object" ? (data.error ?? "Internal error") : String(data) }
+    }
+
+    return data
+  } catch (err) {
+    console.error("logMeal network error:", err)
+    return { error: "Network error while logging meal" }
+  }
 }
 
 export async function getMeals({ page = 1, limit = 20, date }: { page?: number; limit?: number; date?: string } = {}) {
-  const params = new URLSearchParams({ page: String(page), limit: String(limit) })
-  if (date) params.append("date", date)
+  try {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) })
+    if (date) params.append("date", date)
 
-  const res = await fetch(`${API_BASE}/meals?${params.toString()}`, {
-    headers: { ...authHeaders() },
-  })
+    const res = await fetch(`${API_BASE}/meals?${params.toString()}`, {
+      headers: { ...authHeaders() },
+    })
 
-  const data = await parseJSONSafe(res)
-  assertOk(res, data)
-  return data
+    const data = await parseJSONSafe(res)
+
+    // If the backend sent a 500, return a safe empty structure instead of throwing
+    if (!res.ok) {
+      console.error("getMeals backend error:", data)
+      return {
+        meals: [],
+        pagination: { page, limit, total: 0, pages: 0 },
+        error: typeof data === "object" ? (data.error ?? "Internal server error") : String(data),
+      }
+    }
+
+    return data
+  } catch (err) {
+    // Network or parsing failure – surface an empty list instead of exploding
+    console.error("getMeals network error:", err)
+    return {
+      meals: [],
+      pagination: { page, limit, total: 0, pages: 0 },
+      error: "Network error while fetching meals",
+    }
+  }
 }
 
 export async function aiAnalyze({

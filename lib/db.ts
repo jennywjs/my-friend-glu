@@ -1,11 +1,11 @@
 // Conditional import - only import @vercel/postgres if DATABASE_URL is available
-let sql: any = null;
+let sql: any = null
 if (process.env.DATABASE_URL || process.env.POSTGRES_URL) {
   try {
-    const { sql: pgSql } = require("@vercel/postgres");
-    sql = pgSql;
+    const { sql: pgSql } = require("@vercel/postgres")
+    sql = pgSql
   } catch (error) {
-    console.warn("Failed to import @vercel/postgres, falling back to in-memory storage");
+    console.warn("Failed to import @vercel/postgres, falling back to in-memory storage")
   }
 }
 
@@ -78,9 +78,20 @@ function memPaginate(page = 1, limit = 20, date?: string) {
 /* ------------------------------------------------------------------ */
 
 let forceMemory = false
-function useMem() {
-  return forceMemory || (!process.env.POSTGRES_URL && !process.env.POSTGRES_HOST)
+
+/* ------------------------------------------------------------------ */
+/*  Detect missing driver at module load                              */
+/* ------------------------------------------------------------------ */
+
+if (!sql) {
+  console.warn("@vercel/postgres not available – using in-memory store only")
+  forceMemory = true
 }
+
+function useMem() {
+  return forceMemory || sql === null || (!process.env.POSTGRES_URL && !process.env.POSTGRES_HOST)
+}
+
 function handlePgError(err: unknown) {
   console.error("Postgres error – switching to in-memory store:", err)
   forceMemory = true
@@ -211,7 +222,7 @@ export async function updateMeal(id: string, data: Partial<CreateMealData>) {
     }
   } catch (err) {
     handlePgError(err)
-    return updateMeal(id, data)
+    return mem.find((m) => m.id === id) || null
   }
 }
 
@@ -225,7 +236,7 @@ export async function deleteMeal(id: string) {
     await sql`DELETE FROM meals WHERE id = ${id}`
   } catch (err) {
     handlePgError(err)
-    return deleteMeal(id)
+    return
   }
 }
 
