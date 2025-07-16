@@ -152,10 +152,28 @@ export async function aiAnalyze({
   description,
   action = "analyze",
 }: { description: string; action?: "analyze" | "clarify" }) {
-  const res = await fetch(`${API_BASE}/ai/analyze`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders() },
-    body: JSON.stringify({ description, action }),
-  })
-  return res.json()
+  try {
+    const res = await fetch(`${API_BASE}/ai/analyze`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ description, action }),
+    })
+
+    const data = await parseJSONSafe(res)
+
+    // If the backend replied with a 4xx/5xx or non-JSON payload,
+    // surface a graceful error object instead of throwing.
+    if (!res.ok) {
+      console.error("aiAnalyze backend error:", data)
+      return {
+        error: typeof data === "object" ? (data.error ?? "Internal server error") : String(data),
+      }
+    }
+
+    return data
+  } catch (err) {
+    // Network fault or unexpected failure
+    console.error("aiAnalyze network error:", err)
+    return { error: "Network error while contacting AI endpoint" }
+  }
 }
