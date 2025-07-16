@@ -386,7 +386,7 @@ export default function HomePage() {
         <div className="max-w-md mx-auto px-4 py-3">
           <Button
             onClick={() => handleLogMeal("food")}
-            className="w-full h-14 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white shadow-lg flex items-center justify-center gap-3"
+            className="w-full h-14 bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white shadow-lg flex items-center justify-center gap-3"
           >
             <Utensils className="h-5 w-5" />
             <span className="text-lg font-semibold">Log Food</span>
