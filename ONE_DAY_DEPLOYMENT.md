@@ -21,11 +21,11 @@ Get the essential conversational meal logging feature working in production with
   - Test database connection
   
 - [ ] **Basic Environment Variables** (30 mins)
-  ```
+  \`\`\`
   OPENAI_API_KEY=your_key
   DATABASE_URL=vercel_postgres_url
   JWT_SECRET=random_string
-  ```
+  \`\`\`
 
 ---
 
@@ -164,7 +164,7 @@ Get the essential conversational meal logging feature working in production with
 ## **Emergency Fallbacks**
 
 ### **If AI API Fails**
-```javascript
+\`\`\`javascript
 // Simple fallback carb estimates
 const fallbackCarbs = {
   "rice": 45,
@@ -173,7 +173,7 @@ const fallbackCarbs = {
   "fruit": 20,
   "default": 30
 }
-```
+\`\`\`
 
 ### **If Database Fails**
 - Use localStorage for meal storage
@@ -262,4 +262,4 @@ const fallbackCarbs = {
 
 **Reality Check**: This is an aggressive timeline. Focus on getting the core functionality working rather than perfection. You can always improve it after launch! 💪
 
-**Remember**: Done is better than perfect. Launch the MVP and iterate based on real user feedback. 
+**Remember**: Done is better than perfect. Launch the MVP and iterate based on real user feedback.

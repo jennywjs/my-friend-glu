@@ -42,4 +42,4 @@ enum MealType {
   LUNCH
   DINNER
   SNACK
-} 
+}

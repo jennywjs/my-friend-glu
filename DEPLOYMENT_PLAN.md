@@ -305,4 +305,4 @@
 
 ---
 
-*This plan assumes a team of 1-2 developers working full-time. Adjust timeline based on your actual team size and availability.* 
+*This plan assumes a team of 1-2 developers working full-time. Adjust timeline based on your actual team size and availability.*
