@@ -4,8 +4,10 @@ if (process.env.DATABASE_URL || process.env.POSTGRES_URL) {
   try {
     const { sql: pgSql } = require("@vercel/postgres")
     sql = pgSql
+    console.log("✅ @vercel/postgres imported successfully")
   } catch (error) {
-    console.warn("Failed to import @vercel/postgres, falling back to in-memory storage")
+    console.warn("⚠️ Failed to import @vercel/postgres:", error)
+    console.warn("Falling back to in-memory storage")
   }
 }
 
@@ -40,6 +42,7 @@ const mem: Meal[] = []
 let nextId = 1
 
 function memCreate(data: CreateMealData): Meal {
+  console.log(`📝 Creating meal in memory: "${data.description}" (${data.mealType})`)
   const meal: Meal = {
     id: String(nextId++),
     description: data.description,
@@ -51,17 +54,21 @@ function memCreate(data: CreateMealData): Meal {
     updatedAt: new Date(),
   }
   mem.unshift(meal)
+  console.log(`✅ Meal created in memory with ID: ${meal.id}. Total meals: ${mem.length}`)
   return meal
 }
 
 function memPaginate(page = 1, limit = 20, date?: string) {
+  console.log(`📖 Paginating memory meals: page=${page}, limit=${limit}, date=${date}`)
   let list = mem
   if (date) {
     const d = new Date(date).toDateString()
     list = list.filter((m) => new Date(m.createdAt).toDateString() === d)
+    console.log(`🔍 Filtered by date ${date}: ${list.length} meals found`)
   }
   const start = (page - 1) * limit
   const slice = list.slice(start, start + limit)
+  console.log(`📄 Returning ${slice.length} meals from memory (${start} to ${start + limit})`)
   return {
     meals: slice,
     pagination: {
@@ -84,17 +91,27 @@ let forceMemory = false
 /* ------------------------------------------------------------------ */
 
 if (!sql) {
-  console.warn("@vercel/postgres not available – using in-memory store only")
+  console.warn("🗄️ @vercel/postgres not available – using in-memory store only")
   forceMemory = true
 }
 
 function useMem() {
-  return forceMemory || sql === null || (!process.env.POSTGRES_URL && !process.env.POSTGRES_HOST)
+  const shouldUseMemory = forceMemory || sql === null || (!process.env.POSTGRES_URL && !process.env.POSTGRES_HOST)
+  if (shouldUseMemory) {
+    console.log("🗄️ Using in-memory database")
+  }
+  return shouldUseMemory
 }
 
 function handlePgError(err: unknown) {
-  console.error("Postgres error – switching to in-memory store:", err)
+  console.error("💥 Postgres error – switching to in-memory store:")
+  console.error("Error details:", {
+    message: err instanceof Error ? err.message : String(err),
+    stack: err instanceof Error ? err.stack : undefined,
+    name: err instanceof Error ? err.name : undefined,
+  })
   forceMemory = true
+  console.log("🔄 Switched to in-memory storage mode")
 }
 
 /* ------------------------------------------------------------------ */
@@ -103,7 +120,9 @@ function handlePgError(err: unknown) {
 
 export async function createMeal(data: CreateMealData): Promise<Meal> {
   if (useMem()) return memCreate(data)
+
   try {
+    console.log(`🐘 Creating meal in Postgres: "${data.description}" (${data.mealType})`)
     const r = await sql`
       INSERT INTO meals
         (description, meal_type, estimated_carbs, estimated_sugar, ai_summary,
@@ -114,6 +133,7 @@ export async function createMeal(data: CreateMealData): Promise<Meal> {
       RETURNING *
     `
     const m = r.rows[0]
+    console.log(`✅ Meal created in Postgres with ID: ${m.id}`)
     return {
       id: m.id,
       description: m.description,
@@ -132,7 +152,9 @@ export async function createMeal(data: CreateMealData): Promise<Meal> {
 
 export async function getMeals(page = 1, limit = 20, date?: string) {
   if (useMem()) return memPaginate(page, limit, date)
+
   try {
+    console.log(`🐘 Fetching meals from Postgres: page=${page}, limit=${limit}, date=${date}`)
     const where = date ? sql`WHERE DATE(created_at) = ${date}` : sql``
     const rows = await sql`
       SELECT * FROM meals
@@ -153,6 +175,7 @@ export async function getMeals(page = 1, limit = 20, date?: string) {
       createdAt: new Date(m.created_at),
       updatedAt: new Date(m.updated_at),
     }))
+    console.log(`✅ Fetched ${meals.length} meals from Postgres`)
     return {
       meals,
       pagination: {
@@ -169,11 +192,22 @@ export async function getMeals(page = 1, limit = 20, date?: string) {
 }
 
 export async function getMealById(id: string) {
-  if (useMem()) return mem.find((m) => m.id === id) || null
+  if (useMem()) {
+    console.log(`🔍 Finding meal by ID in memory: ${id}`)
+    const meal = mem.find((m) => m.id === id) || null
+    console.log(meal ? `✅ Found meal: ${meal.description}` : `❌ Meal not found: ${id}`)
+    return meal
+  }
+
   try {
+    console.log(`🐘 Finding meal by ID in Postgres: ${id}`)
     const r = await sql`SELECT * FROM meals WHERE id = ${id}`
-    if (!r.rows.length) return null
+    if (!r.rows.length) {
+      console.log(`❌ Meal not found in Postgres: ${id}`)
+      return null
+    }
     const m = r.rows[0]
+    console.log(`✅ Found meal in Postgres: ${m.description}`)
     return {
       id: m.id,
       description: m.description,
@@ -192,12 +226,19 @@ export async function getMealById(id: string) {
 
 export async function updateMeal(id: string, data: Partial<CreateMealData>) {
   if (useMem()) {
+    console.log(`📝 Updating meal in memory: ${id}`)
     const idx = mem.findIndex((m) => m.id === id)
-    if (idx === -1) throw new Error("Meal not found")
+    if (idx === -1) {
+      console.error(`❌ Meal not found for update: ${id}`)
+      throw new Error("Meal not found")
+    }
     mem[idx] = { ...mem[idx], ...data, updatedAt: new Date() }
+    console.log(`✅ Meal updated in memory: ${mem[idx].description}`)
     return mem[idx]
   }
+
   try {
+    console.log(`🐘 Updating meal in Postgres: ${id}`)
     const r = await sql`
       UPDATE meals
       SET description     = COALESCE(${data.description}, description),
@@ -210,6 +251,7 @@ export async function updateMeal(id: string, data: Partial<CreateMealData>) {
       RETURNING *
     `
     const m = r.rows[0]
+    console.log(`✅ Meal updated in Postgres: ${m.description}`)
     return {
       id: m.id,
       description: m.description,
@@ -228,12 +270,21 @@ export async function updateMeal(id: string, data: Partial<CreateMealData>) {
 
 export async function deleteMeal(id: string) {
   if (useMem()) {
+    console.log(`🗑️ Deleting meal from memory: ${id}`)
     const idx = mem.findIndex((m) => m.id === id)
-    if (idx !== -1) mem.splice(idx, 1)
+    if (idx !== -1) {
+      const deleted = mem.splice(idx, 1)[0]
+      console.log(`✅ Meal deleted from memory: ${deleted.description}`)
+    } else {
+      console.log(`❌ Meal not found for deletion: ${id}`)
+    }
     return
   }
+
   try {
+    console.log(`🐘 Deleting meal from Postgres: ${id}`)
     await sql`DELETE FROM meals WHERE id = ${id}`
+    console.log(`✅ Meal deleted from Postgres: ${id}`)
   } catch (err) {
     handlePgError(err)
     return
@@ -246,10 +297,18 @@ export async function deleteMeal(id: string) {
 
 export async function initializeDatabase() {
   if (useMem()) {
-    console.log("🗄️  Using in-memory store – Postgres env vars missing or disabled")
+    console.log("🗄️ Using in-memory store – Postgres env vars missing or disabled")
+    console.log("Environment check:", {
+      POSTGRES_URL: !!process.env.POSTGRES_URL,
+      POSTGRES_HOST: !!process.env.POSTGRES_HOST,
+      DATABASE_URL: !!process.env.DATABASE_URL,
+      sqlAvailable: !!sql,
+    })
     return
   }
+
   try {
+    console.log("🐘 Initializing Postgres database schema...")
     await sql`
       CREATE TABLE IF NOT EXISTS meals (
         id SERIAL PRIMARY KEY,
@@ -262,8 +321,9 @@ export async function initializeDatabase() {
         updated_at TIMESTAMP DEFAULT NOW()
       )
     `
-    console.log("Postgres schema verified ✅")
+    console.log("✅ Postgres schema verified successfully")
   } catch (err) {
+    console.error("💥 Failed to initialize Postgres schema:")
     handlePgError(err)
   }
 }

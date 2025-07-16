@@ -25,93 +25,122 @@ export function clearToken() {
   }
 }
 
-// ---------- Safe JSON parsing ----------
+// ---------- Safe JSON parsing with detailed error info ----------
 async function parseJSONSafe(res: Response) {
   const text = await res.text()
   try {
     return JSON.parse(text)
-  } catch {
-    // Fallback when backend sent HTML / plain-text
-    return { error: text }
-  }
-}
-
-function assertOk(res: Response, data: any) {
-  if (!res.ok) {
-    const message = typeof data === "object" && data?.error ? data.error : `Request failed with status ${res.status}`
-    throw new Error(message)
+  } catch (parseError) {
+    // Return detailed error info when JSON parsing fails
+    console.error("JSON parse error:", parseError)
+    console.error("Response text:", text.substring(0, 500) + (text.length > 500 ? "..." : ""))
+    return {
+      error: `Server returned invalid JSON. Status: ${res.status} ${res.statusText}. Response: ${text.substring(0, 200)}${text.length > 200 ? "..." : ""}`,
+      rawResponse: text,
+      status: res.status,
+      statusText: res.statusText,
+    }
   }
 }
 
 function authHeaders(): Record<string, string> {
   // Remove authentication for MVP deployability
   return {}
-  // const token = getToken();
-  // // For testing without authentication, we'll use a default token
-  // // In production, this should require proper authentication
-  // const testToken = token || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWNwYW4xYjgwMDAwcnp1bzd4OTBnZXY1IiwiZW1haWwiOiJ0ZXN0QGV4YW1wbGUuY29tIiwiaWF0IjoxNzUxNjYyNTIzLCJleHAiOjE3NTIyNjczMjN9.eA1j8O6r7IRbOiFADXyZ0WUPI9u_6IZVksYgP53_o3M";
-  // return { Authorization: `Bearer ${testToken}` };
 }
 
-// --- API Calls ---
+// --- API Calls with detailed error handling ---
 
 export async function register({ email, password, name }: { email: string; password: string; name: string }) {
-  const res = await fetch(`${API_BASE}/auth/register`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password, name }),
-  })
-  const data = await res.json()
-  if (data.token) setToken(data.token)
-  return data
+  try {
+    const res = await fetch(`${API_BASE}/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password, name }),
+    })
+    const data = await parseJSONSafe(res)
+    if (data.token) setToken(data.token)
+    return data
+  } catch (err) {
+    console.error("Register error:", err)
+    return { error: `Registration failed: ${err instanceof Error ? err.message : String(err)}` }
+  }
 }
 
 export async function login({ email, password }: { email: string; password: string }) {
-  const res = await fetch(`${API_BASE}/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
-  })
-  const data = await res.json()
-  if (data.token) setToken(data.token)
-  return data
+  try {
+    const res = await fetch(`${API_BASE}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    })
+    const data = await parseJSONSafe(res)
+    if (data.token) setToken(data.token)
+    return data
+  } catch (err) {
+    console.error("Login error:", err)
+    return { error: `Login failed: ${err instanceof Error ? err.message : String(err)}` }
+  }
 }
 
 export async function getProfile() {
-  const res = await fetch(`${API_BASE}/user/profile`, {
-    headers: { ...authHeaders() },
-  })
-  return res.json()
+  try {
+    const res = await fetch(`${API_BASE}/user/profile`, {
+      headers: { ...authHeaders() },
+    })
+    return await parseJSONSafe(res)
+  } catch (err) {
+    console.error("Get profile error:", err)
+    return { error: `Failed to get profile: ${err instanceof Error ? err.message : String(err)}` }
+  }
 }
 
 export async function updateProfile({ name }: { name: string }) {
-  const res = await fetch(`${API_BASE}/user/profile`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json", ...authHeaders() },
-    body: JSON.stringify({ name }),
-  })
-  return res.json()
+  try {
+    const res = await fetch(`${API_BASE}/user/profile`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ name }),
+    })
+    return await parseJSONSafe(res)
+  } catch (err) {
+    console.error("Update profile error:", err)
+    return { error: `Failed to update profile: ${err instanceof Error ? err.message : String(err)}` }
+  }
 }
 
 export async function logMeal({ description, mealType }: { description: string; mealType: string }) {
   try {
+    console.log(`Attempting to log meal: ${description} (${mealType})`)
+
     const res = await fetch(`${API_BASE}/meals`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ description, mealType }),
     })
 
+    console.log(`Response status: ${res.status} ${res.statusText}`)
+    console.log(`Response headers:`, Object.fromEntries(res.headers.entries()))
+
     const data = await parseJSONSafe(res)
+    console.log("Parsed response data:", data)
 
     if (!res.ok) {
-      console.error("logMeal backend error:", data)
-      return { error: typeof data === "object" ? (data.error ?? "Internal error") : String(data) }
+      const errorMsg = `Failed to log meal (${res.status} ${res.statusText}): ${
+        typeof data === "object" && data?.error
+          ? data.error
+          : data?.rawResponse
+            ? `Server returned: ${data.rawResponse.substring(0, 300)}`
+            : "Unknown server error"
+      }`
+      console.error("logMeal backend error:", errorMsg)
+      return { error: errorMsg }
     }
 
     return data
   } catch (err) {
+    const errorMsg = `Network error while logging meal: ${err instanceof Error ? err.message : String(err)}`
     console.error("logMeal network error:", err)
-    return { error: "Network error while logging meal" }
+    return { error: errorMsg }
   }
 }
 
@@ -120,30 +149,42 @@ export async function getMeals({ page = 1, limit = 20, date }: { page?: number; 
     const params = new URLSearchParams({ page: String(page), limit: String(limit) })
     if (date) params.append("date", date)
 
-    const res = await fetch(`${API_BASE}/meals?${params.toString()}`, {
+    const url = `${API_BASE}/meals?${params.toString()}`
+    console.log(`Fetching meals from: ${url}`)
+
+    const res = await fetch(url, {
       headers: { ...authHeaders() },
     })
 
-    const data = await parseJSONSafe(res)
+    console.log(`getMeals response status: ${res.status} ${res.statusText}`)
 
-    // If the backend sent a 500, return a safe empty structure instead of throwing
+    const data = await parseJSONSafe(res)
+    console.log("getMeals parsed data:", data)
+
     if (!res.ok) {
-      console.error("getMeals backend error:", data)
+      const errorMsg = `Failed to fetch meals (${res.status} ${res.statusText}): ${
+        typeof data === "object" && data?.error
+          ? data.error
+          : data?.rawResponse
+            ? `Server returned: ${data.rawResponse.substring(0, 300)}`
+            : "Unknown server error"
+      }`
+      console.error("getMeals backend error:", errorMsg)
       return {
         meals: [],
         pagination: { page, limit, total: 0, pages: 0 },
-        error: typeof data === "object" ? (data.error ?? "Internal server error") : String(data),
+        error: errorMsg,
       }
     }
 
     return data
   } catch (err) {
-    // Network or parsing failure – surface an empty list instead of exploding
+    const errorMsg = `Network error while fetching meals: ${err instanceof Error ? err.message : String(err)}`
     console.error("getMeals network error:", err)
     return {
       meals: [],
       pagination: { page, limit, total: 0, pages: 0 },
-      error: "Network error while fetching meals",
+      error: errorMsg,
     }
   }
 }
@@ -153,27 +194,36 @@ export async function aiAnalyze({
   action = "analyze",
 }: { description: string; action?: "analyze" | "clarify" }) {
   try {
+    console.log(`AI analyze request: action=${action}, description="${description.substring(0, 100)}..."`)
+
     const res = await fetch(`${API_BASE}/ai/analyze`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ description, action }),
     })
 
-    const data = await parseJSONSafe(res)
+    console.log(`AI analyze response status: ${res.status} ${res.statusText}`)
+    console.log(`AI analyze response headers:`, Object.fromEntries(res.headers.entries()))
 
-    // If the backend replied with a 4xx/5xx or non-JSON payload,
-    // surface a graceful error object instead of throwing.
+    const data = await parseJSONSafe(res)
+    console.log("AI analyze parsed data:", data)
+
     if (!res.ok) {
-      console.error("aiAnalyze backend error:", data)
-      return {
-        error: typeof data === "object" ? (data.error ?? "Internal server error") : String(data),
-      }
+      const errorMsg = `AI analysis failed (${res.status} ${res.statusText}): ${
+        typeof data === "object" && data?.error
+          ? data.error
+          : data?.rawResponse
+            ? `Server returned: ${data.rawResponse.substring(0, 300)}`
+            : "Unknown AI server error"
+      }`
+      console.error("aiAnalyze backend error:", errorMsg)
+      return { error: errorMsg }
     }
 
     return data
   } catch (err) {
-    // Network fault or unexpected failure
+    const errorMsg = `Network error while contacting AI endpoint: ${err instanceof Error ? err.message : String(err)}`
     console.error("aiAnalyze network error:", err)
-    return { error: "Network error while contacting AI endpoint" }
+    return { error: errorMsg }
   }
 }
