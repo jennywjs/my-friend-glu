@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { ArrowLeft, Send, Camera, Image as ImageIcon, Loader2, X } from "lucide-react"
-import { aiAnalyze, aiAnalyzePhoto } from "@/lib/api"
+import { ArrowLeft, Send, Camera, Image as ImageIcon, Loader2 } from "lucide-react"
+import { aiAnalyze, aiAnalyzePhoto, logMeal } from "@/lib/api"
 
 interface MealEntry {
   id: string
@@ -51,6 +51,7 @@ export default function ConversationalLogger({
   const [isProcessing, setIsProcessing] = useState(false)
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null)
   const [showTextInput, setShowTextInput] = useState(false)
+  const [readyToLog, setReadyToLog] = useState(false) // New state for showing Log button
   const [mealData, setMealData] = useState({
     description: "",
     estimatedCarbs: 0,
@@ -67,7 +68,6 @@ export default function ConversationalLogger({
 
   useEffect(() => {
     if (editingEntry) {
-      // Pre-populate with existing entry data
       setMessages(editingEntry.chatHistory || [])
       setMealData({
         description: editingEntry.description,
@@ -81,7 +81,6 @@ export default function ConversationalLogger({
       if (editingEntry.photoUrl) {
         setCapturedPhoto(editingEntry.photoUrl)
       }
-      // Add initial edit message
       const editMessage: Message = {
         id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         type: "ai",
@@ -138,44 +137,38 @@ export default function ConversationalLogger({
     const file = event.target.files?.[0]
     if (!file) return
 
-    // Show preview immediately with base64
     const reader = new FileReader()
     reader.onload = async (e) => {
       const previewUrl = e.target?.result as string
       setCapturedPhoto(previewUrl)
       
-      // Add user message with preview
       addMessage("Here's what I'm eating", "user", previewUrl)
       
-      // Move to AI analysis step
       setConversationStep(0)
-      setShowTextInput(true)
+      setShowTextInput(false) // Don't show text input yet
       setIsProcessing(true)
       
-      // Upload to Vercel Blob in background
       const uploadedUrl = await uploadPhoto(file)
       
       if (uploadedUrl) {
         setMealData((prev) => ({ ...prev, photoUrl: uploadedUrl }))
         setCapturedPhoto(uploadedUrl)
-        // Process with AI Vision using the uploaded URL
-        await processPhotoWithAI(uploadedUrl, file)
+        await processPhotoWithAI(uploadedUrl)
       } else {
-        // Fallback to base64 if upload fails
         setMealData((prev) => ({ ...prev, photoUrl: previewUrl }))
-        await processPhotoWithAI(previewUrl, file)
+        await processPhotoWithAI(previewUrl)
       }
     }
     reader.readAsDataURL(file)
   }
 
-  const processPhotoWithAI = async (photoUrl: string, _file?: File) => {
+  const processPhotoWithAI = async (photoUrl: string) => {
     setIsProcessing(true)
     try {
-      // Call AI Vision API to analyze the photo
       const response = await aiAnalyzePhoto({ imageUrl: photoUrl })
+      console.log('[v0] AI Photo response:', response)
       
-      if (response.analysis && !response.error) {
+      if (response.analysis && !response.analysis.error && response.analysis.foods?.length > 0) {
         const { foods, description, carbSource, estimatedCarbs } = response.analysis
         
         const foodList = foods.length > 0 ? foods.join(', ') : description
@@ -185,24 +178,78 @@ export default function ConversationalLogger({
           description: foodList,
           carbSource: carbSource || '',
           estimatedCarbs: estimatedCarbs || 0,
+          aiSummary: carbSource ? `Most carbs from ${carbSource}` : foodList,
         }))
         
-        // Ask a simple portion clarification question
+        // Show carb estimate directly - no questions
         const aiResponse = `I see ${foodList}!
 
-Was this a regular portion, or was it on the larger or smaller side?`
+**Estimated carbs: ~${estimatedCarbs}g**
+${carbSource ? `\nMost carbs come from the ${carbSource}.` : ''}
+
+Tap "Log Meal" below when you're ready to save.`
         
         addMessage(aiResponse, "ai")
-        setConversationStep(1)
+        setReadyToLog(true) // Show the Log button
+        setShowTextInput(false)
       } else {
-        // Fallback if vision fails
+        // AI couldn't analyze - ask for description
         addMessage("I couldn't quite make out the food. Could you describe what you're eating?", "ai")
+        setShowTextInput(true)
         setConversationStep(0)
       }
     } catch (error) {
       console.error('Error processing photo:', error)
       addMessage("I couldn't quite make out the food. Could you describe what you're eating?", "ai")
+      setShowTextInput(true)
       setConversationStep(0)
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  const handleLogMeal = async () => {
+    setIsProcessing(true)
+    
+    try {
+      // Determine meal type based on time of day
+      const hour = new Date().getHours()
+      let autoMealType: "breakfast" | "brunch" | "lunch" | "dinner" | "snack" = "snack"
+      if (hour >= 5 && hour < 10) autoMealType = "breakfast"
+      else if (hour >= 10 && hour < 12) autoMealType = "brunch"
+      else if (hour >= 12 && hour < 15) autoMealType = "lunch"
+      else if (hour >= 17 && hour < 21) autoMealType = "dinner"
+      
+      // Save to database
+      const result = await logMeal({
+        description: mealData.description,
+        mealType: autoMealType.toUpperCase(),
+        photoUrl: mealData.photoUrl,
+        carbSource: mealData.carbSource,
+      })
+      
+      console.log('[v0] Meal logged result:', result)
+      
+      // Create meal entry for parent component
+      const mealEntry: Omit<MealEntry, "id" | "timestamp"> = {
+        type: autoMealType,
+        description: mealData.description,
+        carbs: mealData.estimatedCarbs,
+        aiSummary: mealData.aiSummary || `${mealData.estimatedCarbs}g carbs`,
+        synthesizedSummary: mealData.carbSource ? `Most carbs from ${mealData.carbSource}` : mealData.description,
+        ingredients: [mealData.description],
+        chatHistory: messages,
+        photoUrl: mealData.photoUrl,
+      }
+      
+      addMessage(`Logged! Your ${autoMealType} has been saved.`, "ai")
+      
+      setTimeout(() => {
+        onMealLogged(mealEntry)
+      }, 1000)
+    } catch (error) {
+      console.error('Error logging meal:', error)
+      addMessage("Something went wrong saving your meal. Please try again.", "ai")
     } finally {
       setIsProcessing(false)
     }
@@ -211,116 +258,59 @@ Was this a regular portion, or was it on the larger or smaller side?`
   const processAIResponse = async (userInput: string, step: number) => {
     try {
       setIsProcessing(true)
-      let aiResponse = ""
-      let nextStep = step + 1
 
-      switch (step) {
-        case 0:
-          // User described their meal (text fallback path)
-          setMealData((prev) => ({ ...prev, description: userInput }))
+      if (step === 0) {
+        // User described their meal via text
+        setMealData((prev) => ({ ...prev, description: userInput }))
+        
+        // Get AI analysis for text description
+        const analysisResponse = await aiAnalyze({ 
+          description: userInput, 
+          action: 'analyze' 
+        })
+        
+        if (analysisResponse.analysis) {
+          const { estimatedCarbs, summary, carbSource } = analysisResponse.analysis
           
-          // Ask simple portion question
-          aiResponse = `Got it! Was this a regular portion, or was it on the larger or smaller side?`
-          break
-
-        case 1:
-          // User answered portion question - provide carb estimate
-          const fullDescription = `${mealData.description} - ${userInput} portion`
-          setMealData((prev) => ({ ...prev, description: fullDescription }))
+          setMealData((prev) => ({ 
+            ...prev, 
+            estimatedCarbs, 
+            aiSummary: summary,
+            carbSource: carbSource || extractCarbSource(userInput),
+          }))
           
-          // Get AI analysis
-          const analysisResponse = await aiAnalyze({ 
-            description: fullDescription, 
-            action: 'analyze' 
-          })
+          const aiResponse = `Got it!
+
+**Estimated carbs: ~${estimatedCarbs}g**
+${carbSource ? `\nMost carbs come from the ${carbSource}.` : ''}
+
+Tap "Log Meal" below when you're ready to save.`
           
-          if (analysisResponse.analysis) {
-            const { estimatedCarbs, summary } = analysisResponse.analysis
-            // Extract carb source from description
-            const carbSource = extractCarbSource(mealData.description)
-            
-            setMealData((prev) => ({ 
-              ...prev, 
-              estimatedCarbs, 
-              aiSummary: summary,
-              carbSource,
-            }))
-            
-            aiResponse = `Based on what I see, this is around ${estimatedCarbs}g of carbs.
-
-${carbSource ? `Most of the carbs come from the ${carbSource}.` : ''}
-
-What type of meal is this?
-- Breakfast
-- Brunch  
-- Lunch
-- Dinner
-- Snack`
-          } else {
-            // Fallback estimate
-            const estimatedCarbs = Math.floor(Math.random() * 30) + 25
-            const carbSource = extractCarbSource(mealData.description)
-            
-            setMealData((prev) => ({ 
-              ...prev, 
-              estimatedCarbs,
-              carbSource,
-            }))
-            
-            aiResponse = `Based on what I see, this is around ${estimatedCarbs}g of carbs.
-
-${carbSource ? `Most of the carbs come from the ${carbSource}.` : ''}
-
-What type of meal is this?
-- Breakfast
-- Brunch  
-- Lunch
-- Dinner
-- Snack`
-          }
-          break
-
-        case 2:
-          // User selected meal type - confirm and save
-          const mealType = userInput.toLowerCase()
-          let selectedType: "breakfast" | "brunch" | "lunch" | "dinner" | "snack" = "snack"
+          addMessage(aiResponse, "ai")
+          setReadyToLog(true)
+          setShowTextInput(false)
+        } else {
+          // Fallback estimate
+          const estimatedCarbs = 30
+          const carbSource = extractCarbSource(userInput)
           
-          if (mealType.includes("breakfast")) selectedType = "breakfast"
-          else if (mealType.includes("brunch")) selectedType = "brunch"
-          else if (mealType.includes("lunch")) selectedType = "lunch"
-          else if (mealType.includes("dinner")) selectedType = "dinner"
-          else if (mealType.includes("snack")) selectedType = "snack"
+          setMealData((prev) => ({ 
+            ...prev, 
+            estimatedCarbs,
+            carbSource,
+          }))
           
-          setMealData((prev) => ({ ...prev, mealType: selectedType }))
+          const aiResponse = `Got it!
+
+**Estimated carbs: ~${estimatedCarbs}g**
+${carbSource ? `\nMost carbs come from the ${carbSource}.` : ''}
+
+Tap "Log Meal" below when you're ready to save.`
           
-          aiResponse = `Saved! Your ${selectedType} has been logged.
-
-${mealData.carbSource ? `Remember: ${mealData.carbSource} was your main carb source here.` : ''}`
-          break
-
-        default:
-          aiResponse = "Let's start fresh!"
-          nextStep = 0
-      }
-
-      addMessage(aiResponse, "ai")
-      setConversationStep(nextStep)
-      
-      // If this was the final step, save the meal
-      if (nextStep >= 3) {
-        setTimeout(() => {
-          const mealEntry: Omit<MealEntry, "id" | "timestamp"> = {
-            type: mealData.mealType,
-            description: mealData.description,
-            carbs: mealData.estimatedCarbs,
-            aiSummary: mealData.aiSummary || `${mealData.estimatedCarbs}g carbs${mealData.carbSource ? ` - mostly from ${mealData.carbSource}` : ''}`,
-            synthesizedSummary: mealData.carbSource ? `Most carbs from ${mealData.carbSource}` : mealData.description,
-            ingredients: [mealData.description],
-            chatHistory: messages,
-            photoUrl: mealData.photoUrl,
-          }
-          onMealLogged(mealEntry)
-        }, 1500)
+          addMessage(aiResponse, "ai")
+          setReadyToLog(true)
+          setShowTextInput(false)
+        }
       }
     } catch (error) {
       console.error('Error processing AI response:', error)
@@ -330,7 +320,6 @@ ${mealData.carbSource ? `Remember: ${mealData.carbSource} was your main carb sou
     }
   }
 
-  // Extract likely carb sources from food description
   const extractCarbSource = (description: string): string => {
     const carbFoods = [
       'rice', 'pasta', 'noodles', 'bread', 'naan', 'tortilla', 'potato', 'fries',
@@ -371,6 +360,7 @@ ${mealData.carbSource ? `Remember: ${mealData.carbSource} was your main carb sou
     setMessages([])
     setConversationStep(-1)
     setShowTextInput(false)
+    setReadyToLog(false)
     setMealData({
       description: "",
       estimatedCarbs: 0,
@@ -502,7 +492,7 @@ ${mealData.carbSource ? `Remember: ${mealData.carbSource} was your main carb sou
       </div>
 
       {/* Chat Interface */}
-      <div className="max-w-md mx-auto px-4 py-4 pb-24">
+      <div className="max-w-md mx-auto px-4 py-4 pb-32">
         {/* Photo Preview */}
         {capturedPhoto && (
           <div className="mb-4 relative">
@@ -518,7 +508,7 @@ ${mealData.carbSource ? `Remember: ${mealData.carbSource} was your main carb sou
           <CardContent className="p-0">
             <ScrollArea 
               ref={scrollAreaRef}
-              className="h-[calc(100vh-420px)] p-4"
+              className="h-[calc(100vh-480px)] p-4"
             >
               <div className="space-y-4">
                 {messages.map((message) => (
@@ -550,7 +540,7 @@ ${mealData.carbSource ? `Remember: ${mealData.carbSource} was your main carb sou
                     <div className="bg-white border border-stone-200 rounded-2xl px-4 py-3">
                       <div className="flex items-center space-x-2">
                         <Loader2 className="h-4 w-4 animate-spin text-stone-500" />
-                        <span className="text-sm text-stone-600">Looking at your meal...</span>
+                        <span className="text-sm text-stone-600">Analyzing your meal...</span>
                       </div>
                     </div>
                   </div>
@@ -559,33 +549,46 @@ ${mealData.carbSource ? `Remember: ${mealData.carbSource} was your main carb sou
             </ScrollArea>
           </CardContent>
         </Card>
+      </div>
 
-        {/* Input Area */}
-        {showTextInput && (
-          <div className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-sm border-t border-stone-200">
-            <div className="max-w-md mx-auto px-4 py-4">
-              <form onSubmit={handleSubmit} className="flex items-center gap-3">
-                <Input
-                  ref={inputRef}
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  placeholder="Type your response..."
-                  className="flex-1 rounded-xl border-stone-200 bg-white"
-                  disabled={isProcessing}
-                />
-                <Button
-                  type="submit"
-                  size="icon"
-                  disabled={!inputValue.trim() || isProcessing}
-                  className="rounded-xl bg-stone-900 hover:bg-stone-800 h-10 w-10"
-                >
-                  <Send className="h-4 w-4" />
-                </Button>
-              </form>
-            </div>
-          </div>
-        )}
+      {/* Bottom Action Area */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-sm border-t border-stone-200">
+        <div className="max-w-md mx-auto px-4 py-4">
+          {readyToLog ? (
+            // Show Log button when ready
+            <Button
+              onClick={handleLogMeal}
+              disabled={isProcessing}
+              className="w-full py-6 text-lg font-medium rounded-xl bg-stone-900 hover:bg-stone-800"
+            >
+              {isProcessing ? (
+                <Loader2 className="h-5 w-5 animate-spin mr-2" />
+              ) : null}
+              Log Meal
+            </Button>
+          ) : showTextInput ? (
+            // Show text input when AI needs clarification
+            <form onSubmit={handleSubmit} className="flex items-center gap-3">
+              <Input
+                ref={inputRef}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Describe what you ate..."
+                className="flex-1 rounded-xl border-stone-200 bg-white py-6"
+                disabled={isProcessing}
+              />
+              <Button
+                type="submit"
+                size="icon"
+                disabled={!inputValue.trim() || isProcessing}
+                className="rounded-xl bg-stone-900 hover:bg-stone-800 h-12 w-12"
+              >
+                <Send className="h-5 w-5" />
+              </Button>
+            </form>
+          ) : null}
+        </div>
       </div>
     </div>
   )
