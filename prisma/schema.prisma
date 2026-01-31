@@ -31,6 +31,8 @@ model Meal {
   estimatedCarbs  Float
   estimatedSugar  Float
   aiSummary       String?
+  photoUrl        String?
+  carbSource      String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   

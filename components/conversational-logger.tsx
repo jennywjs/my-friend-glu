@@ -7,8 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Send, Mic, MicOff, Loader2 } from "lucide-react"
+import { ArrowLeft, Send, Camera, Image as ImageIcon, Loader2, X } from "lucide-react"
 import { aiAnalyze } from "@/lib/api"
 
 interface MealEntry {
@@ -22,6 +21,7 @@ interface MealEntry {
   synthesizedSummary: string
   ingredients: string[]
   chatHistory?: Message[]
+  photoUrl?: string
 }
 
 interface Message {
@@ -29,6 +29,7 @@ interface Message {
   type: "user" | "ai"
   content: string
   timestamp: Date
+  imageUrl?: string
 }
 
 interface ConversationalLoggerProps {
@@ -46,18 +47,23 @@ export default function ConversationalLogger({
 }: ConversationalLoggerProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState("")
-  const [isListening, setIsListening] = useState(false)
-  const [conversationStep, setConversationStep] = useState(0)
+  const [conversationStep, setConversationStep] = useState(-1) // -1 = photo capture step
   const [isProcessing, setIsProcessing] = useState(false)
+  const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null)
+  const [showTextInput, setShowTextInput] = useState(false)
   const [mealData, setMealData] = useState({
     description: "",
     estimatedCarbs: 0,
-    mealType: "breakfast" as "breakfast" | "brunch" | "lunch" | "dinner" | "snack",
+    mealType: "snack" as "breakfast" | "brunch" | "lunch" | "dinner" | "snack",
     aiSummary: "",
+    carbSource: "",
     recommendations: [] as string[],
+    photoUrl: "",
   })
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (editingEntry) {
@@ -68,27 +74,23 @@ export default function ConversationalLogger({
         estimatedCarbs: editingEntry.carbs,
         mealType: editingEntry.type,
         aiSummary: editingEntry.aiSummary,
+        carbSource: "",
         recommendations: editingEntry.recommendation ? [editingEntry.recommendation] : [],
+        photoUrl: editingEntry.photoUrl || "",
       })
+      if (editingEntry.photoUrl) {
+        setCapturedPhoto(editingEntry.photoUrl)
+      }
       // Add initial edit message
       const editMessage: Message = {
         id: Date.now().toString(),
         type: "ai",
-        content: `Hi! I see you want to edit your ${editingEntry.type}. What changes would you like to make?`,
+        content: `I see you want to update this meal. Would you like to take a new photo, or just tell me what changed?`,
         timestamp: new Date(),
       }
       setMessages((prev) => [...prev, editMessage])
       setConversationStep(0)
-    } else {
-      // Start fresh conversation
-      const initialMessage: Message = {
-        id: Date.now().toString(),
-        type: "ai",
-        content: "Hi Mato! What did you eat? Describe your meal in as much detail as you can.",
-        timestamp: new Date(),
-      }
-      setMessages([initialMessage])
-      setConversationStep(0)
+      setShowTextInput(true)
     }
   }, [editingEntry])
 
@@ -98,15 +100,69 @@ export default function ConversationalLogger({
     }
   }, [messages])
 
-  const addMessage = (content: string, type: "user" | "ai") => {
+  const addMessage = (content: string, type: "user" | "ai", imageUrl?: string) => {
     const newMessage: Message = {
       id: Date.now().toString(),
       type,
       content,
       timestamp: new Date(),
+      imageUrl,
     }
     setMessages((prev) => [...prev, newMessage])
     return newMessage
+  }
+
+  const handlePhotoCapture = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    // Convert to base64 for display
+    const reader = new FileReader()
+    reader.onload = async (e) => {
+      const photoUrl = e.target?.result as string
+      setCapturedPhoto(photoUrl)
+      setMealData((prev) => ({ ...prev, photoUrl }))
+      
+      // Add user message with photo
+      addMessage("Here's what I'm eating", "user", photoUrl)
+      
+      // Move to AI analysis
+      setConversationStep(0)
+      setShowTextInput(true)
+      await processPhotoWithAI(photoUrl)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const processPhotoWithAI = async (photoUrl: string) => {
+    setIsProcessing(true)
+    try {
+      // Simulate AI identifying food from photo
+      // In production, this would send the image to a vision API
+      const mockFoods = [
+        "rice bowl with grilled chicken and vegetables",
+        "pasta with tomato sauce and parmesan",
+        "salad with mixed greens and avocado",
+        "sandwich with turkey and cheese",
+        "curry with rice and naan bread",
+      ]
+      const identifiedFood = mockFoods[Math.floor(Math.random() * mockFoods.length)]
+      
+      setMealData((prev) => ({ ...prev, description: identifiedFood }))
+      
+      // Ask a simple portion clarification question
+      const aiResponse = `I see ${identifiedFood}! 
+
+Was this a regular portion, or was it on the larger or smaller side?`
+      
+      addMessage(aiResponse, "ai")
+      setConversationStep(1)
+    } catch (error) {
+      console.error('Error processing photo:', error)
+      addMessage("I couldn't quite make out the food. Could you describe what you're eating?", "ai")
+    } finally {
+      setIsProcessing(false)
+    }
   }
 
   const processAIResponse = async (userInput: string, step: number) => {
@@ -117,28 +173,16 @@ export default function ConversationalLogger({
 
       switch (step) {
         case 0:
-          // First response - ask for clarification
+          // User described their meal (text fallback path)
           setMealData((prev) => ({ ...prev, description: userInput }))
           
-          // Get clarifying questions from AI
-          const clarifyResponse = await aiAnalyze({ 
-            description: userInput, 
-            action: 'clarify' 
-          })
-          
-          if (clarifyResponse.error) {
-            // Show error message but continue with fallback
-            aiResponse = `⚠️ ${clarifyResponse.error}\n\nThat sounds delicious! Can you tell me about the portion sizes? For example, how big was your serving, and what size bowl or plate did you use? This helps me estimate the carbs more accurately. 🥄`
-          } else if (clarifyResponse.questions && clarifyResponse.questions.length > 0) {
-            aiResponse = `That sounds delicious! ${clarifyResponse.questions.join(' ')} This helps me estimate the carbs more accurately. 🥄`
-          } else {
-            aiResponse = "That sounds delicious! Can you tell me about the portion sizes? For example, how big was your serving, and what size bowl or plate did you use? This helps me estimate the carbs more accurately. 🥄"
-          }
+          // Ask simple portion question
+          aiResponse = `Got it! Was this a regular portion, or was it on the larger or smaller side?`
           break
 
         case 1:
-          // Second response - provide estimate and ask for meal type
-          const fullDescription = `${mealData.description} ${userInput}`
+          // User answered portion question - provide carb estimate
+          const fullDescription = `${mealData.description} - ${userInput} portion`
           setMealData((prev) => ({ ...prev, description: fullDescription }))
           
           // Get AI analysis
@@ -147,62 +191,54 @@ export default function ConversationalLogger({
             action: 'analyze' 
           })
           
-          if (analysisResponse.error) {
-            // Show error message but continue with fallback estimates
-            const estimatedCarbs = Math.floor(Math.random() * 40) + 30
-            setMealData((prev) => ({ ...prev, estimatedCarbs }))
+          if (analysisResponse.analysis) {
+            const { estimatedCarbs, summary } = analysisResponse.analysis
+            // Extract carb source from description
+            const carbSource = extractCarbSource(mealData.description)
             
-            aiResponse = `⚠️ ${analysisResponse.error}\n\nPerfect! Based on your description, I estimate this contains about ${estimatedCarbs} grams of carbohydrates. 
-
-What type of eating occasion was this?
-• Breakfast 🌅
-• Brunch 🥐  
-• Lunch 🥗
-• Dinner 🍽️
-• Snack 🍎
-
-Just tell me which one!`
-          } else if (analysisResponse.analysis) {
-            const { estimatedCarbs, summary, recommendations } = analysisResponse.analysis
             setMealData((prev) => ({ 
               ...prev, 
               estimatedCarbs, 
               aiSummary: summary,
-              recommendations 
+              carbSource,
             }))
             
-            aiResponse = `Perfect! Based on your description, I estimate this contains about ${estimatedCarbs} grams of carbohydrates. 
+            aiResponse = `Based on what I see, this is around ${estimatedCarbs}g of carbs.
 
-${summary}
+${carbSource ? `Most of the carbs come from the ${carbSource}.` : ''}
 
-What type of eating occasion was this?
-• Breakfast 🌅
-• Brunch 🥐  
-• Lunch 🥗
-• Dinner 🍽️
-• Snack 🍎
-
-Just tell me which one!`
+What type of meal is this?
+- Breakfast
+- Brunch  
+- Lunch
+- Dinner
+- Snack`
           } else {
-            // Fallback response
-            const estimatedCarbs = Math.floor(Math.random() * 40) + 30
-            setMealData((prev) => ({ ...prev, estimatedCarbs }))
+            // Fallback estimate
+            const estimatedCarbs = Math.floor(Math.random() * 30) + 25
+            const carbSource = extractCarbSource(mealData.description)
             
-            aiResponse = `Perfect! Based on your description, I estimate this contains about ${estimatedCarbs} grams of carbohydrates. 
+            setMealData((prev) => ({ 
+              ...prev, 
+              estimatedCarbs,
+              carbSource,
+            }))
+            
+            aiResponse = `Based on what I see, this is around ${estimatedCarbs}g of carbs.
 
-What type of eating occasion was this?
-• Breakfast 🌅
-• Brunch 🥐  
-• Lunch 🥗
-• Dinner 🍽️
-• Snack 🍎
+${carbSource ? `Most of the carbs come from the ${carbSource}.` : ''}
 
-Just tell me which one!`
+What type of meal is this?
+- Breakfast
+- Brunch  
+- Lunch
+- Dinner
+- Snack`
           }
           break
 
         case 2:
-          // Third response - confirm meal type and provide final summary
+          // User selected meal type - confirm and save
           const mealType = userInput.toLowerCase()
           let selectedType: "breakfast" | "brunch" | "lunch" | "dinner" | "snack" = "snack"
           
@@ -214,21 +250,13 @@ Just tell me which one!`
           
           setMealData((prev) => ({ ...prev, mealType: selectedType }))
           
-          const recommendations = mealData.recommendations.length > 0 
-            ? mealData.recommendations 
-            : ["A gentle walk after eating could help balance your glucose levels."]
-          
-          aiResponse = `Perfect! I've logged your ${selectedType} with ${mealData.estimatedCarbs}g of carbohydrates.
+          aiResponse = `Saved! Your ${selectedType} has been logged.
 
-${mealData.aiSummary || `Your ${selectedType} looks great!`}
-
-💡 Tip: ${recommendations[0]}
-
-Your meal has been saved! You can view it in your timeline.`
+${mealData.carbSource ? `Remember: ${mealData.carbSource} was your main carb source here.` : ''}`
           break
 
         default:
-          aiResponse = "I'm not sure what to do next. Let's start over!"
+          aiResponse = "Let's start fresh!"
           nextStep = 0
       }
 
@@ -242,21 +270,33 @@ Your meal has been saved! You can view it in your timeline.`
             type: mealData.mealType,
             description: mealData.description,
             carbs: mealData.estimatedCarbs,
-            aiSummary: mealData.aiSummary,
-            recommendation: mealData.recommendations[0],
-            synthesizedSummary: mealData.aiSummary || mealData.description,
+            aiSummary: mealData.aiSummary || `${mealData.estimatedCarbs}g carbs${mealData.carbSource ? ` - mostly from ${mealData.carbSource}` : ''}`,
+            synthesizedSummary: mealData.carbSource ? `Most carbs from ${mealData.carbSource}` : mealData.description,
             ingredients: [mealData.description],
             chatHistory: messages,
+            photoUrl: mealData.photoUrl,
           }
           onMealLogged(mealEntry)
-        }, 2000)
+        }, 1500)
       }
     } catch (error) {
       console.error('Error processing AI response:', error)
-      addMessage("I'm having trouble processing that right now. Let's try again!", "ai")
+      addMessage("Something went wrong. Let's try that again!", "ai")
     } finally {
       setIsProcessing(false)
     }
+  }
+
+  // Extract likely carb sources from food description
+  const extractCarbSource = (description: string): string => {
+    const carbFoods = [
+      'rice', 'pasta', 'noodles', 'bread', 'naan', 'tortilla', 'potato', 'fries',
+      'beans', 'lentils', 'oatmeal', 'cereal', 'fruit', 'banana', 'apple',
+      'quinoa', 'couscous', 'wrap', 'bun', 'roll', 'crackers', 'chips'
+    ]
+    const lowerDesc = description.toLowerCase()
+    const found = carbFoods.find(food => lowerDesc.includes(food))
+    return found || ''
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -267,7 +307,6 @@ Your meal has been saved! You can view it in your timeline.`
     addMessage(userInput, "user")
     setInputValue("")
 
-    // Process AI response
     await processAIResponse(userInput, conversationStep)
   }
 
@@ -278,70 +317,165 @@ Your meal has been saved! You can view it in your timeline.`
     }
   }
 
-  const toggleListening = () => {
-    setIsListening(!isListening)
-    // In a real app, you'd implement speech recognition here
-    if (!isListening) {
-      // Simulate voice input
-      setTimeout(() => {
-        setIsListening(false)
-        setInputValue("I had a bowl of oatmeal with berries")
-      }, 2000)
-    }
+  const handleTextFallback = () => {
+    setShowTextInput(true)
+    setConversationStep(0)
+    addMessage("What did you eat? Just describe it however feels natural.", "ai")
   }
 
-  const getMealTypeColor = (type: string) => {
-    switch (type) {
-      case "breakfast":
-        return "bg-yellow-100 text-yellow-800"
-      case "brunch":
-        return "bg-orange-100 text-orange-800"
-      case "lunch":
-        return "bg-green-100 text-green-800"
-      case "dinner":
-        return "bg-blue-100 text-blue-800"
-      case "snack":
-        return "bg-purple-100 text-purple-800"
-      default:
-        return "bg-gray-100 text-gray-800"
-    }
+  const retakePhoto = () => {
+    setCapturedPhoto(null)
+    setMessages([])
+    setConversationStep(-1)
+    setShowTextInput(false)
+    setMealData({
+      description: "",
+      estimatedCarbs: 0,
+      mealType: "snack",
+      aiSummary: "",
+      carbSource: "",
+      recommendations: [],
+      photoUrl: "",
+    })
+  }
+
+  // Photo capture screen (default first step)
+  if (conversationStep === -1 && !editingEntry) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-stone-50 to-stone-100">
+        {/* Header */}
+        <div className="bg-white/80 backdrop-blur-sm border-b border-stone-200">
+          <div className="max-w-md mx-auto px-4 py-4">
+            <div className="flex items-center justify-between">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onCancel}
+                className="text-stone-600 hover:text-stone-900"
+              >
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back
+              </Button>
+              <h1 className="text-lg font-medium text-stone-900">Log Meal</h1>
+              <div className="w-16" />
+            </div>
+          </div>
+        </div>
+
+        {/* Photo Capture Area */}
+        <div className="max-w-md mx-auto px-6 py-12">
+          <div className="text-center mb-8">
+            <h2 className="text-2xl font-semibold text-stone-900 mb-2">
+              What are you eating?
+            </h2>
+            <p className="text-stone-600">
+              Snap a photo and I'll estimate the carbs
+            </p>
+          </div>
+
+          {/* Camera Button - Primary Action */}
+          <div className="space-y-4">
+            <button
+              onClick={() => cameraInputRef.current?.click()}
+              className="w-full aspect-[4/3] rounded-2xl border-2 border-dashed border-stone-300 bg-white hover:bg-stone-50 hover:border-stone-400 transition-all flex flex-col items-center justify-center gap-4"
+            >
+              <div className="w-20 h-20 rounded-full bg-stone-900 flex items-center justify-center">
+                <Camera className="h-10 w-10 text-white" />
+              </div>
+              <span className="text-lg font-medium text-stone-700">Take Photo</span>
+            </button>
+
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handlePhotoCapture}
+              className="hidden"
+            />
+
+            {/* Secondary Options */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="flex-1 py-4 px-4 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 transition-colors flex items-center justify-center gap-2"
+              >
+                <ImageIcon className="h-5 w-5 text-stone-500" />
+                <span className="text-stone-700">Choose Photo</span>
+              </button>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handlePhotoCapture}
+                className="hidden"
+              />
+
+              <button
+                onClick={handleTextFallback}
+                className="flex-1 py-4 px-4 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 transition-colors text-stone-700"
+              >
+                Type Instead
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-pink-50 to-purple-50">
+    <div className="min-h-screen bg-gradient-to-b from-stone-50 to-stone-100">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
+      <div className="bg-white/80 backdrop-blur-sm border-b border-stone-200">
         <div className="max-w-md mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <Button
               variant="ghost"
               size="sm"
               onClick={onCancel}
-              className="text-gray-600 hover:text-gray-900"
+              className="text-stone-600 hover:text-stone-900"
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back
             </Button>
-            <div className="text-center">
-              <h1 className="text-lg font-semibold text-gray-900">
-                {editingEntry ? "Edit Meal" : "Log Meal"}
-              </h1>
-              <p className="text-sm text-gray-600">
-                {editingEntry ? "Update your meal details" : "Tell me what you ate"}
-              </p>
-            </div>
-            <div className="w-10" /> {/* Spacer for centering */}
+            <h1 className="text-lg font-medium text-stone-900">
+              {editingEntry ? "Edit Meal" : "Log Meal"}
+            </h1>
+            {capturedPhoto && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={retakePhoto}
+                className="text-stone-600 hover:text-stone-900"
+              >
+                Retake
+              </Button>
+            )}
+            {!capturedPhoto && <div className="w-16" />}
           </div>
         </div>
       </div>
 
       {/* Chat Interface */}
-      <div className="max-w-md mx-auto px-4 py-6 pb-20">
-        <Card className="shadow-sm">
+      <div className="max-w-md mx-auto px-4 py-4 pb-24">
+        {/* Photo Preview */}
+        {capturedPhoto && (
+          <div className="mb-4 relative">
+            <img
+              src={capturedPhoto}
+              alt="Meal photo"
+              className="w-full aspect-[4/3] object-cover rounded-xl"
+            />
+          </div>
+        )}
+
+        <Card className="shadow-sm border-stone-200">
           <CardContent className="p-0">
             <ScrollArea 
               ref={scrollAreaRef}
-              className="h-[calc(100vh-280px)] p-4"
+              className="h-[calc(100vh-420px)] p-4"
             >
               <div className="space-y-4">
                 {messages.map((message) => (
@@ -350,29 +484,30 @@ Your meal has been saved! You can view it in your timeline.`
                     className={`flex ${message.type === "user" ? "justify-end" : "justify-start"}`}
                   >
                     <div
-                      className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                      className={`max-w-[85%] rounded-2xl px-4 py-3 ${
                         message.type === "user"
-                          ? "bg-gradient-to-r from-pink-500 to-purple-600 text-white"
-                          : "bg-white border border-gray-200 text-gray-900"
+                          ? "bg-stone-900 text-white"
+                          : "bg-white border border-stone-200 text-stone-900"
                       }`}
                     >
-                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                      <p className="text-xs opacity-70 mt-1">
-                        {message.timestamp.toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
+                      {message.imageUrl && (
+                        <img
+                          src={message.imageUrl}
+                          alt="Food"
+                          className="w-full rounded-lg mb-2"
+                        />
+                      )}
+                      <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.content}</p>
                     </div>
                   </div>
                 ))}
                 
                 {isProcessing && (
                   <div className="flex justify-start">
-                    <div className="bg-white border border-gray-200 rounded-lg px-4 py-2">
+                    <div className="bg-white border border-stone-200 rounded-2xl px-4 py-3">
                       <div className="flex items-center space-x-2">
-                        <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
-                        <span className="text-sm text-gray-600">Thinking...</span>
+                        <Loader2 className="h-4 w-4 animate-spin text-stone-500" />
+                        <span className="text-sm text-stone-600">Looking at your meal...</span>
                       </div>
                     </div>
                   </div>
@@ -383,29 +518,31 @@ Your meal has been saved! You can view it in your timeline.`
         </Card>
 
         {/* Input Area */}
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg">
-          <div className="max-w-md mx-auto px-4 py-3">
-            <form onSubmit={handleSubmit} className="flex items-center space-x-2">
-              <Input
-                ref={inputRef}
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="Describe your meal..."
-                className="flex-1"
-                disabled={isProcessing}
-              />
-              <Button
-                type="submit"
-                size="sm"
-                disabled={!inputValue.trim() || isProcessing}
-                className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700"
-              >
-                <Send className="h-4 w-4" />
-              </Button>
-            </form>
+        {showTextInput && (
+          <div className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-sm border-t border-stone-200">
+            <div className="max-w-md mx-auto px-4 py-4">
+              <form onSubmit={handleSubmit} className="flex items-center gap-3">
+                <Input
+                  ref={inputRef}
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder="Type your response..."
+                  className="flex-1 rounded-xl border-stone-200 bg-white"
+                  disabled={isProcessing}
+                />
+                <Button
+                  type="submit"
+                  size="icon"
+                  disabled={!inputValue.trim() || isProcessing}
+                  className="rounded-xl bg-stone-900 hover:bg-stone-800 h-10 w-10"
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
+              </form>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   )

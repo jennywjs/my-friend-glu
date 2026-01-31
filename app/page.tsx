@@ -5,10 +5,10 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { MessageCircle, Clock, Utensils, Coffee, Loader2 } from "lucide-react"
+import { Camera, Clock, Loader2 } from "lucide-react"
 import ConversationalLogger from "@/components/conversational-logger"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { ChevronDown } from "lucide-react"
+import { MoreHorizontal } from "lucide-react"
 import { getMeals, logMeal } from "@/lib/api"
 
 interface MealEntry {
@@ -22,6 +22,7 @@ interface MealEntry {
   synthesizedSummary: string
   ingredients: string[]
   chatHistory?: Message[]
+  photoUrl?: string
 }
 
 interface Message {
@@ -55,16 +56,15 @@ export default function HomePage() {
           carbs: meal.estimatedCarbs,
           timestamp: new Date(meal.createdAt),
           aiSummary: meal.aiSummary || meal.description,
-          recommendation: "A gentle walk after eating could help balance your glucose levels.",
           synthesizedSummary: meal.aiSummary || meal.description,
-          ingredients: [meal.description], // Simplified for now
+          ingredients: [meal.description],
           chatHistory: [],
+          photoUrl: meal.photoUrl,
         }))
         setMealEntries(formattedMeals)
       }
     } catch (error) {
       console.error('Error fetching meals:', error)
-      // Fallback to empty array if API fails
       setMealEntries([])
     } finally {
       setLoading(false)
@@ -83,10 +83,9 @@ export default function HomePage() {
 
   const handleMealLogged = async (entry: Omit<MealEntry, "id" | "timestamp">) => {
     try {
-      // Map frontend meal type to backend meal type
       const mealTypeMap: Record<string, string> = {
         breakfast: 'BREAKFAST',
-        brunch: 'LUNCH', // Map brunch to lunch for backend
+        brunch: 'LUNCH',
         lunch: 'LUNCH',
         dinner: 'DINNER',
         snack: 'SNACK'
@@ -94,14 +93,12 @@ export default function HomePage() {
 
       const backendMealType = mealTypeMap[entry.type] || 'SNACK'
 
-      // Log meal to backend
       const response = await logMeal({
         description: entry.description,
         mealType: backendMealType
       })
 
       if (response.meal) {
-        // Create new entry from backend response
         const newEntry: MealEntry = {
           id: response.meal.id,
           type: response.meal.mealType.toLowerCase() as "breakfast" | "brunch" | "lunch" | "dinner" | "snack",
@@ -109,24 +106,21 @@ export default function HomePage() {
           carbs: response.meal.estimatedCarbs,
           timestamp: new Date(response.meal.createdAt),
           aiSummary: response.meal.aiSummary || response.meal.description,
-          recommendation: response.recommendations?.[0] || "A gentle walk after eating could help balance your glucose levels.",
           synthesizedSummary: response.meal.aiSummary || response.meal.description,
           ingredients: [response.meal.description],
           chatHistory: [],
+          photoUrl: entry.photoUrl,
         }
 
         if (editingEntry) {
-          // Update existing entry
           setMealEntries((prev) => prev.map((e) => (e.id === editingEntry.id ? newEntry : e)))
           setEditingEntry(null)
         } else {
-          // Add new entry to the beginning
           setMealEntries((prev) => [newEntry, ...prev])
         }
       }
     } catch (error) {
       console.error('Error logging meal:', error)
-      // Fallback to local state if API fails
       if (editingEntry) {
         const updatedEntry: MealEntry = {
           ...entry,
@@ -151,35 +145,48 @@ export default function HomePage() {
     return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
   }
 
-  const getMealIcon = (type: string) => {
-    switch (type) {
-      case "breakfast":
-      case "lunch":
-      case "dinner":
-        return <Utensils className="h-4 w-4" />
-      case "snack":
-        return <Coffee className="h-4 w-4" />
-      default:
-        return <Utensils className="h-4 w-4" />
+  const formatDate = (date: Date) => {
+    const today = new Date()
+    const yesterday = new Date(today)
+    yesterday.setDate(yesterday.getDate() - 1)
+    
+    if (date.toDateString() === today.toDateString()) {
+      return "Today"
+    } else if (date.toDateString() === yesterday.toDateString()) {
+      return "Yesterday"
     }
+    return date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })
   }
 
   const getMealTypeColor = (type: string) => {
     switch (type) {
       case "breakfast":
-        return "bg-yellow-100 text-yellow-800"
+        return "bg-amber-50 text-amber-700 border-amber-200"
       case "brunch":
-        return "bg-orange-100 text-orange-800"
+        return "bg-orange-50 text-orange-700 border-orange-200"
       case "lunch":
-        return "bg-green-100 text-green-800"
+        return "bg-emerald-50 text-emerald-700 border-emerald-200"
       case "dinner":
-        return "bg-blue-100 text-blue-800"
+        return "bg-blue-50 text-blue-700 border-blue-200"
       case "snack":
-        return "bg-purple-100 text-purple-800"
+        return "bg-violet-50 text-violet-700 border-violet-200"
       default:
-        return "bg-gray-100 text-gray-800"
+        return "bg-stone-50 text-stone-700 border-stone-200"
     }
   }
+
+  // Calculate today's carbs
+  const todaysCarbs = mealEntries
+    .filter(meal => {
+      const today = new Date()
+      return meal.timestamp.toDateString() === today.toDateString()
+    })
+    .reduce((sum, meal) => sum + meal.carbs, 0)
+
+  const todaysMeals = mealEntries.filter(meal => {
+    const today = new Date()
+    return meal.timestamp.toDateString() === today.toDateString()
+  })
 
   if (showLogger) {
     return (
@@ -196,153 +203,191 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-pink-50 via-white to-purple-50">
+    <div className="min-h-screen bg-stone-50">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-4xl mx-auto px-4 py-6">
+      <div className="bg-white border-b border-stone-200">
+        <div className="max-w-lg mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">My Friend Glu</h1>
-              <p className="text-gray-600 mt-1">Your AI-powered gestational diabetes companion</p>
+              <h1 className="text-2xl font-semibold text-stone-900">My Friend Glu</h1>
+              <p className="text-stone-500 text-sm mt-0.5">Build your carb intuition</p>
             </div>
-            <div className="flex items-center space-x-4">
-              <Button
-                onClick={() => handleLogMeal("food")}
-                className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white"
-              >
-                <MessageCircle className="h-4 w-4 mr-2" />
-                Log Meal
-              </Button>
-            </div>
+            <Button
+              onClick={() => handleLogMeal("food")}
+              className="bg-stone-900 hover:bg-stone-800 text-white rounded-xl px-4"
+            >
+              <Camera className="h-4 w-4 mr-2" />
+              Log Meal
+            </Button>
           </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Today's Meals</p>
-                  <p className="text-2xl font-bold text-gray-900">{mealEntries.length}</p>
-                </div>
-                <Utensils className="h-8 w-8 text-pink-500" />
+      <div className="max-w-lg mx-auto px-4 py-6">
+        {/* Today's Summary - Simplified to carbs only */}
+        <Card className="mb-6 border-stone-200 shadow-sm">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-stone-500 mb-1">Today's carbs</p>
+                <p className="text-3xl font-semibold text-stone-900">{todaysCarbs}g</p>
               </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Total Carbs</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {mealEntries.reduce((sum, meal) => sum + meal.carbs, 0)}g
-                  </p>
-                </div>
-                <Coffee className="h-8 w-8 text-purple-500" />
+              <div className="text-right">
+                <p className="text-sm text-stone-500 mb-1">Meals logged</p>
+                <p className="text-3xl font-semibold text-stone-900">{todaysMeals.length}</p>
               </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">AI Insights</p>
-                  <p className="text-2xl font-bold text-gray-900">{mealEntries.filter(m => m.aiSummary).length}</p>
-                </div>
-                <MessageCircle className="h-8 w-8 text-blue-500" />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Meal Timeline */}
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-gray-900">Today's Meals</h2>
-              {loading && <Loader2 className="h-5 w-5 animate-spin text-gray-500" />}
-            </div>
-            
-            {mealEntries.length === 0 && !loading ? (
-              <div className="text-center py-12">
-                <Utensils className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No meals logged yet</h3>
-                <p className="text-gray-600 mb-4">Start by logging your first meal to track your nutrition</p>
-                <Button
-                  onClick={() => handleLogMeal("food")}
-                  className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700"
-                >
-                  Log Your First Meal
-                </Button>
+        <div className="mb-4">
+          <h2 className="text-lg font-medium text-stone-900">Recent Meals</h2>
+        </div>
+        
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-6 w-6 animate-spin text-stone-400" />
+          </div>
+        ) : mealEntries.length === 0 ? (
+          <Card className="border-stone-200">
+            <CardContent className="p-8 text-center">
+              <div className="w-16 h-16 rounded-full bg-stone-100 flex items-center justify-center mx-auto mb-4">
+                <Camera className="h-8 w-8 text-stone-400" />
               </div>
-            ) : (
-              <ScrollArea className="h-[600px]">
-                <div className="space-y-4">
-                  {mealEntries.map((entry) => (
-                    <div
-                      key={entry.id}
-                      className="flex items-start space-x-4 p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow"
-                    >
-                      <div className="flex-shrink-0">
-                        <div className="w-10 h-10 bg-gradient-to-br from-pink-100 to-purple-100 rounded-full flex items-center justify-center">
-                          {getMealIcon(entry.type)}
-                        </div>
-                      </div>
-                      
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center space-x-2">
-                            <Badge className={getMealTypeColor(entry.type)}>
-                              {entry.type.charAt(0).toUpperCase() + entry.type.slice(1)}
-                            </Badge>
-                            <span className="text-sm text-gray-500 flex items-center">
-                              <Clock className="h-3 w-3 mr-1" />
-                              {formatTime(entry.timestamp)}
-                            </span>
+              <h3 className="text-lg font-medium text-stone-900 mb-2">No meals logged yet</h3>
+              <p className="text-stone-500 mb-6">
+                Snap a photo of your food to start building your carb intuition
+              </p>
+              <Button
+                onClick={() => handleLogMeal("food")}
+                className="bg-stone-900 hover:bg-stone-800 text-white rounded-xl"
+              >
+                Log Your First Meal
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <ScrollArea className="h-[calc(100vh-340px)]">
+            <div className="space-y-4">
+              {mealEntries.map((entry, index) => {
+                // Show date header if it's the first item or different date from previous
+                const showDateHeader = index === 0 || 
+                  formatDate(entry.timestamp) !== formatDate(mealEntries[index - 1].timestamp)
+                
+                return (
+                  <div key={entry.id}>
+                    {showDateHeader && (
+                      <p className="text-sm font-medium text-stone-500 mb-3 mt-2">
+                        {formatDate(entry.timestamp)}
+                      </p>
+                    )}
+                    
+                    {/* Photo-Primary Meal Card */}
+                    <Card className="overflow-hidden border-stone-200 shadow-sm hover:shadow-md transition-shadow">
+                      {/* Photo Section - Primary Element */}
+                      {entry.photoUrl ? (
+                        <div className="relative aspect-[16/9] bg-stone-100">
+                          <img
+                            src={entry.photoUrl}
+                            alt={entry.description}
+                            className="w-full h-full object-cover"
+                          />
+                          {/* Overlay with carb count */}
+                          <div className="absolute bottom-3 left-3">
+                            <div className="bg-white/90 backdrop-blur-sm rounded-lg px-3 py-1.5 shadow-sm">
+                              <span className="text-lg font-semibold text-stone-900">{entry.carbs}g</span>
+                              <span className="text-stone-500 text-sm ml-1">carbs</span>
+                            </div>
                           </div>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm">
-                                <ChevronDown className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => handleEditEntry(entry)}>
-                                Edit
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          {/* Menu */}
+                          <div className="absolute top-3 right-3">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon"
+                                  className="h-8 w-8 bg-white/90 backdrop-blur-sm rounded-full hover:bg-white"
+                                >
+                                  <MoreHorizontal className="h-4 w-4 text-stone-600" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handleEditEntry(entry)}>
+                                  Edit
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
                         </div>
-                        
-                        <h3 className="font-medium text-gray-900 mb-1">{entry.description}</h3>
-                        <p className="text-sm text-gray-600 mb-2">{entry.synthesizedSummary}</p>
-                        
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-4 text-sm text-gray-500">
-                            <span className="flex items-center">
-                              <Coffee className="h-3 w-3 mr-1" />
-                              {entry.carbs}g carbs
-                            </span>
+                      ) : (
+                        // Fallback for meals without photos
+                        <div className="relative bg-gradient-to-br from-stone-100 to-stone-200 aspect-[16/9] flex items-center justify-center">
+                          <div className="text-center">
+                            <p className="text-4xl font-semibold text-stone-700">{entry.carbs}g</p>
+                            <p className="text-stone-500 text-sm">carbs</p>
+                          </div>
+                          {/* Menu */}
+                          <div className="absolute top-3 right-3">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon"
+                                  className="h-8 w-8 bg-white/80 rounded-full hover:bg-white"
+                                >
+                                  <MoreHorizontal className="h-4 w-4 text-stone-600" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handleEditEntry(entry)}>
+                                  Edit
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Info Section */}
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Badge 
+                                variant="outline" 
+                                className={`${getMealTypeColor(entry.type)} border text-xs font-medium`}
+                              >
+                                {entry.type.charAt(0).toUpperCase() + entry.type.slice(1)}
+                              </Badge>
+                              <span className="text-xs text-stone-400 flex items-center">
+                                <Clock className="h-3 w-3 mr-1" />
+                                {formatTime(entry.timestamp)}
+                              </span>
+                            </div>
+                            
+                            {/* Carb source summary - key insight from PRD */}
+                            <p className="text-sm text-stone-600 line-clamp-2">
+                              {entry.synthesizedSummary || entry.description}
+                            </p>
                           </div>
                           
-                          {entry.recommendation && (
-                            <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
-                              💡 {entry.recommendation}
+                          {/* Carb count for non-photo cards */}
+                          {!entry.photoUrl && (
+                            <div className="text-right flex-shrink-0">
+                              <p className="text-lg font-semibold text-stone-900">{entry.carbs}g</p>
                             </div>
                           )}
                         </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
-            )}
-          </CardContent>
-        </Card>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )
+              })}
+            </div>
+          </ScrollArea>
+        )}
       </div>
     </div>
   )

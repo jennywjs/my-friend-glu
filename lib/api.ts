@@ -75,11 +75,16 @@ export async function updateProfile({ name }: { name: string }) {
   return res.json();
 }
 
-export async function logMeal({ description, mealType }: { description: string; mealType: string }) {
+export async function logMeal({ description, mealType, photoUrl, carbSource }: { 
+  description: string; 
+  mealType: string; 
+  photoUrl?: string;
+  carbSource?: string;
+}) {
   const res = await fetch(`${getAPIBase()}/meals`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ description, mealType })
+    body: JSON.stringify({ description, mealType, photoUrl, carbSource })
   });
   return res.json();
 }

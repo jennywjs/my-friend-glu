@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     // }
     
     const body = await request.json()
-    const { description, mealType } = body
+    const { description, mealType, photoUrl, carbSource } = body
     
     if (!description || !mealType) {
       return NextResponse.json(
@@ -30,12 +30,13 @@ export async function POST(request: NextRequest) {
     // Create meal record
     const meal = await prisma.meal.create({
       data: {
-        // userId: authResult.user.userId, // Remove userId for now
         description,
         mealType,
         estimatedCarbs: analysis.estimatedCarbs,
         estimatedSugar: analysis.estimatedSugar,
-        aiSummary: analysis.summary
+        aiSummary: analysis.summary,
+        photoUrl: photoUrl || null,
+        carbSource: carbSource || null,
       }
     })
     
@@ -46,11 +47,11 @@ export async function POST(request: NextRequest) {
         description: meal.description,
         mealType: meal.mealType,
         estimatedCarbs: meal.estimatedCarbs,
-        estimatedSugar: meal.estimatedSugar,
         aiSummary: meal.aiSummary,
+        photoUrl: meal.photoUrl,
+        carbSource: meal.carbSource,
         createdAt: meal.createdAt
       },
-      recommendations: analysis.recommendations,
       error: analysis.error
     })
     
@@ -105,8 +106,9 @@ export async function GET(request: NextRequest) {
         description: true,
         mealType: true,
         estimatedCarbs: true,
-        estimatedSugar: true,
         aiSummary: true,
+        photoUrl: true,
+        carbSource: true,
         createdAt: true
       }
     })
