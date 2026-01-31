@@ -44,11 +44,17 @@ export default function HomePage() {
     const initializeApp = async () => {
       try {
         // Ensure database tables exist
-        await fetch('/api/setup-db', { method: 'POST' })
+        const setupResponse = await fetch('/api/setup-db', { method: 'POST' })
+        const setupResult = await setupResponse.json()
+        console.log('[v0] DB setup result:', setupResult)
       } catch (e) {
-        console.log('[v0] DB setup call completed')
+        console.log('[v0] DB setup error:', e)
       }
-      fetchMeals()
+      
+      // Small delay to ensure tables are created before fetching
+      setTimeout(() => {
+        fetchMeals()
+      }, 500)
     }
     initializeApp()
   }, [])
@@ -57,7 +63,8 @@ export default function HomePage() {
     try {
       setLoading(true)
       const response = await getMeals()
-      if (response.meals) {
+      console.log('[v0] getMeals response:', response)
+      if (response.meals && Array.isArray(response.meals)) {
         const formattedMeals: MealEntry[] = response.meals.map((meal: any) => ({
           id: meal.id,
           type: meal.mealType.toLowerCase() as "breakfast" | "brunch" | "lunch" | "dinner" | "snack",
@@ -71,9 +78,12 @@ export default function HomePage() {
           photoUrl: meal.photoUrl,
         }))
         setMealEntries(formattedMeals)
+      } else {
+        // No meals or error, just show empty state
+        setMealEntries([])
       }
     } catch (error) {
-      console.error('Error fetching meals:', error)
+      console.log('[v0] Error fetching meals (database may not be ready):', error)
       setMealEntries([])
     } finally {
       setLoading(false)
