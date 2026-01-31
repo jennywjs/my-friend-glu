@@ -83,7 +83,7 @@ export default function ConversationalLogger({
       }
       // Add initial edit message
       const editMessage: Message = {
-        id: Date.now().toString(),
+        id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         type: "ai",
         content: `I see you want to update this meal. Would you like to take a new photo, or just tell me what changed?`,
         timestamp: new Date(),
@@ -102,7 +102,7 @@ export default function ConversationalLogger({
 
   const addMessage = (content: string, type: "user" | "ai", imageUrl?: string) => {
     const newMessage: Message = {
-      id: Date.now().toString(),
+      id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
       type,
       content,
       timestamp: new Date(),
