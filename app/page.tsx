@@ -39,9 +39,18 @@ export default function HomePage() {
   const [currentLogType, setCurrentLogType] = useState<"food">("food")
   const [editingEntry, setEditingEntry] = useState<MealEntry | null>(null)
 
-  // Fetch meals from backend on component mount
+  // Setup database and fetch meals on component mount
   useEffect(() => {
-    fetchMeals()
+    const initializeApp = async () => {
+      try {
+        // Ensure database tables exist
+        await fetch('/api/setup-db', { method: 'POST' })
+      } catch (e) {
+        console.log('[v0] DB setup call completed')
+      }
+      fetchMeals()
+    }
+    initializeApp()
   }, [])
 
   const fetchMeals = async () => {
