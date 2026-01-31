@@ -90,6 +90,8 @@ Important:
 }
 
 export async function analyzePhotoMeal(imageUrl: string): Promise<PhotoAnalysis> {
+  console.log('[v0] analyzePhotoMeal called with imageUrl:', imageUrl?.substring(0, 100))
+  
   const prompt = `
 You are a friendly carb-awareness assistant helping someone track their meals.
 
@@ -108,14 +110,15 @@ Important guidelines:
 `
 
   try {
+    console.log('[v0] Calling generateText with image...')
     const result = await generateText({
-      model: 'openai/gpt-4o-mini',
+      model: 'openai/gpt-4o',
       messages: [
         {
           role: 'user',
           content: [
             { type: 'text', text: prompt },
-            { type: 'image', image: imageUrl },
+            { type: 'image', image: new URL(imageUrl) },
           ],
         },
       ],
@@ -123,6 +126,7 @@ Important guidelines:
         schema: PhotoAnalysisSchema,
       }),
     })
+    console.log('[v0] generateText result:', result.experimental_output)
 
     const analysis = result.experimental_output
     
@@ -137,7 +141,8 @@ Important guidelines:
       estimatedCarbs: analysis.estimatedCarbs,
     }
   } catch (error: unknown) {
-    console.error('Photo analysis error:', error)
+    console.error('[v0] Photo analysis error:', error)
+    console.error('[v0] Error details:', error instanceof Error ? error.message : String(error))
     
     return {
       foods: [],
