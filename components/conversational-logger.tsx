@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { ArrowLeft, Send, Camera, Image as ImageIcon, Loader2, X } from "lucide-react"
-import { aiAnalyze } from "@/lib/api"
+import { aiAnalyze, aiAnalyzePhoto } from "@/lib/api"
 
 interface MealEntry {
   id: string
@@ -112,54 +112,97 @@ export default function ConversationalLogger({
     return newMessage
   }
 
+  const uploadPhoto = async (file: File): Promise<string | null> => {
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      })
+      
+      if (!response.ok) {
+        throw new Error('Upload failed')
+      }
+      
+      const data = await response.json()
+      return data.url
+    } catch (error) {
+      console.error('Error uploading photo:', error)
+      return null
+    }
+  }
+
   const handlePhotoCapture = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
 
-    // Convert to base64 for display
+    // Show preview immediately with base64
     const reader = new FileReader()
     reader.onload = async (e) => {
-      const photoUrl = e.target?.result as string
-      setCapturedPhoto(photoUrl)
-      setMealData((prev) => ({ ...prev, photoUrl }))
+      const previewUrl = e.target?.result as string
+      setCapturedPhoto(previewUrl)
       
-      // Add user message with photo
-      addMessage("Here's what I'm eating", "user", photoUrl)
+      // Add user message with preview
+      addMessage("Here's what I'm eating", "user", previewUrl)
       
-      // Move to AI analysis
+      // Move to AI analysis step
       setConversationStep(0)
       setShowTextInput(true)
-      await processPhotoWithAI(photoUrl)
+      setIsProcessing(true)
+      
+      // Upload to Vercel Blob in background
+      const uploadedUrl = await uploadPhoto(file)
+      
+      if (uploadedUrl) {
+        setMealData((prev) => ({ ...prev, photoUrl: uploadedUrl }))
+        setCapturedPhoto(uploadedUrl)
+        // Process with AI Vision using the uploaded URL
+        await processPhotoWithAI(uploadedUrl, file)
+      } else {
+        // Fallback to base64 if upload fails
+        setMealData((prev) => ({ ...prev, photoUrl: previewUrl }))
+        await processPhotoWithAI(previewUrl, file)
+      }
     }
     reader.readAsDataURL(file)
   }
 
-  const processPhotoWithAI = async (photoUrl: string) => {
+  const processPhotoWithAI = async (photoUrl: string, _file?: File) => {
     setIsProcessing(true)
     try {
-      // Simulate AI identifying food from photo
-      // In production, this would send the image to a vision API
-      const mockFoods = [
-        "rice bowl with grilled chicken and vegetables",
-        "pasta with tomato sauce and parmesan",
-        "salad with mixed greens and avocado",
-        "sandwich with turkey and cheese",
-        "curry with rice and naan bread",
-      ]
-      const identifiedFood = mockFoods[Math.floor(Math.random() * mockFoods.length)]
+      // Call AI Vision API to analyze the photo
+      const response = await aiAnalyzePhoto({ imageUrl: photoUrl })
       
-      setMealData((prev) => ({ ...prev, description: identifiedFood }))
-      
-      // Ask a simple portion clarification question
-      const aiResponse = `I see ${identifiedFood}! 
+      if (response.analysis && !response.error) {
+        const { foods, description, carbSource, estimatedCarbs } = response.analysis
+        
+        const foodList = foods.length > 0 ? foods.join(', ') : description
+        
+        setMealData((prev) => ({ 
+          ...prev, 
+          description: foodList,
+          carbSource: carbSource || '',
+          estimatedCarbs: estimatedCarbs || 0,
+        }))
+        
+        // Ask a simple portion clarification question
+        const aiResponse = `I see ${foodList}!
 
 Was this a regular portion, or was it on the larger or smaller side?`
-      
-      addMessage(aiResponse, "ai")
-      setConversationStep(1)
+        
+        addMessage(aiResponse, "ai")
+        setConversationStep(1)
+      } else {
+        // Fallback if vision fails
+        addMessage("I couldn't quite make out the food. Could you describe what you're eating?", "ai")
+        setConversationStep(0)
+      }
     } catch (error) {
       console.error('Error processing photo:', error)
       addMessage("I couldn't quite make out the food. Could you describe what you're eating?", "ai")
+      setConversationStep(0)
     } finally {
       setIsProcessing(false)
     }

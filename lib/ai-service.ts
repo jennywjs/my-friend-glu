@@ -1,98 +1,150 @@
-import OpenAI from 'openai'
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-})
+import { generateText, Output } from 'ai'
+import { z } from 'zod'
 
 export interface MealAnalysis {
   estimatedCarbs: number
   estimatedSugar: number
   summary: string
-  recommendations: string[]
+  carbSource: string
+  foodItems: string[]
   error?: string
 }
 
+export interface PhotoAnalysis {
+  foods: string[]
+  description: string
+  carbSource: string
+  estimatedCarbs: number
+  error?: string
+}
+
+const MealAnalysisSchema = z.object({
+  estimatedCarbs: z.number(),
+  estimatedSugar: z.number(),
+  summary: z.string(),
+  carbSource: z.string().nullable(),
+  foodItems: z.array(z.string()),
+})
+
+const PhotoAnalysisSchema = z.object({
+  foods: z.array(z.string()),
+  description: z.string(),
+  carbSource: z.string().nullable(),
+  estimatedCarbs: z.number(),
+})
+
 export async function analyzeMeal(description: string): Promise<MealAnalysis> {
   const prompt = `
-You are a nutritionist specializing in gestational diabetes. Analyze the following meal description and provide:
+You are a friendly carb-awareness assistant. Analyze the following meal description and provide:
 
-1. Estimated carbohydrates in grams
+1. Estimated carbohydrates in grams (be conservative)
 2. Estimated sugar in grams
-3. A brief summary of the meal
-4. 2-3 actionable recommendations for managing blood glucose
+3. A brief, friendly summary (1-2 sentences)
+4. The main carb source (e.g., "rice", "pasta", "bread")
+5. List of identified food items
 
 Meal description: "${description}"
 
-Respond in JSON format:
-{
-  "estimatedCarbs": number,
-  "estimatedSugar": number,
-  "summary": "string",
-  "recommendations": ["string", "string"]
-}
-
-Be conservative with estimates and consider cultural foods. Focus on practical advice for expecting mothers with gestational diabetes.
+Important:
+- Focus ONLY on carbs, not calories or other macros
+- Be non-judgmental and supportive
+- Handle cultural/diverse foods accurately
+- Use simple language
 `
 
   try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [
-        {
-          role: "system",
-          content: "You are a helpful nutritionist assistant for gestational diabetes management."
-        },
-        {
-          role: "user",
-          content: prompt
-        }
-      ],
-      temperature: 0.3,
+    const result = await generateText({
+      model: 'openai/gpt-4o-mini',
+      prompt,
+      experimental_output: Output.object({
+        schema: MealAnalysisSchema,
+      }),
     })
 
-    const response = completion.choices[0]?.message?.content
-    if (!response) {
-      throw new Error('No response from AI service')
-    }
-
-    const analysis = JSON.parse(response) as MealAnalysis
+    const analysis = result.experimental_output
     
-    // Validate the response
-    if (typeof analysis.estimatedCarbs !== 'number' || 
-        typeof analysis.estimatedSugar !== 'number' ||
-        typeof analysis.summary !== 'string' ||
-        !Array.isArray(analysis.recommendations)) {
-      throw new Error('Invalid AI response format')
+    if (!analysis) {
+      throw new Error('No analysis output')
     }
 
-    return analysis
-  } catch (error: any) {
+    return {
+      estimatedCarbs: analysis.estimatedCarbs,
+      estimatedSugar: analysis.estimatedSugar,
+      summary: analysis.summary,
+      carbSource: analysis.carbSource || '',
+      foodItems: analysis.foodItems,
+    }
+  } catch (error: unknown) {
     console.error('AI analysis error:', error)
     
-    // Check for specific OpenAI quota error
-    if (error?.status === 429 || error?.code === 'insufficient_quota') {
-      return {
-        estimatedCarbs: 30,
-        estimatedSugar: 5,
-        summary: `Meal logged: ${description}`,
-        recommendations: [
-          "Consider taking a gentle walk after this meal",
-          "Monitor your blood glucose levels in the next 2 hours"
-        ],
-        error: "AI analysis temporarily unavailable due to quota limits. Using standard estimates."
-      }
-    }
-    
-    // Fallback response for other errors
+    // Fallback response
     return {
       estimatedCarbs: 30,
       estimatedSugar: 5,
       summary: `Meal logged: ${description}`,
-      recommendations: [
-        "Consider taking a gentle walk after this meal",
-        "Monitor your blood glucose levels in the next 2 hours"
-      ],
+      carbSource: '',
+      foodItems: [description],
       error: "AI analysis temporarily unavailable. Using standard estimates."
+    }
+  }
+}
+
+export async function analyzePhotoMeal(imageUrl: string): Promise<PhotoAnalysis> {
+  const prompt = `
+You are a friendly carb-awareness assistant helping someone track their meals.
+
+Look at this food photo and identify:
+1. All visible food items (be specific about cultural dishes)
+2. A natural description of the meal
+3. The main carbohydrate source (e.g., "rice", "naan", "pasta")
+4. Estimated total carbohydrates in grams
+
+Important guidelines:
+- Focus ONLY on carbs, not calories or other macros
+- Be non-judgmental and supportive  
+- Recognize diverse cuisines (Indian, Mexican, Asian, etc.)
+- If portion is unclear, assume a typical serving
+- Use simple, friendly language
+`
+
+  try {
+    const result = await generateText({
+      model: 'openai/gpt-4o-mini',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            { type: 'image', image: imageUrl },
+          ],
+        },
+      ],
+      experimental_output: Output.object({
+        schema: PhotoAnalysisSchema,
+      }),
+    })
+
+    const analysis = result.experimental_output
+    
+    if (!analysis) {
+      throw new Error('No analysis output')
+    }
+
+    return {
+      foods: analysis.foods,
+      description: analysis.description,
+      carbSource: analysis.carbSource || '',
+      estimatedCarbs: analysis.estimatedCarbs,
+    }
+  } catch (error: unknown) {
+    console.error('Photo analysis error:', error)
+    
+    return {
+      foods: [],
+      description: '',
+      carbSource: '',
+      estimatedCarbs: 0,
+      error: "Couldn't analyze the photo. Please describe what you're eating."
     }
   }
 }
@@ -101,46 +153,28 @@ export async function generateClarifyingQuestions(description: string): Promise<
   const prompt = `
 Given this meal description: "${description}"
 
-Generate 1-2 clarifying questions to better estimate the nutritional content. Focus on:
-- Portion sizes
-- Specific ingredients
-- Cooking methods
-- Cultural food items
+Generate 1 simple question to better estimate carbs. Focus on:
+- Portion size using relatable terms (like "fist-sized" or "cup")
+- Main starchy items
 
-Return as a JSON array of strings.
+Keep it conversational and non-judgmental. Return as a JSON array with 1 question.
 `
 
   try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [
-        {
-          role: "system",
-          content: "You are a helpful nutritionist assistant."
-        },
-        {
-          role: "user",
-          content: prompt
-        }
-      ],
-      temperature: 0.3,
+    const result = await generateText({
+      model: 'openai/gpt-4o-mini',
+      prompt,
     })
 
-    const response = completion.choices[0]?.message?.content
+    const response = result.text
     if (!response) {
-      return ["Could you tell me more about the portion sizes?"]
+      return ["Was this a regular portion, or was it on the larger or smaller side?"]
     }
 
     const questions = JSON.parse(response) as string[]
-    return Array.isArray(questions) ? questions : ["Could you tell me more about the portion sizes?"]
-  } catch (error: any) {
+    return Array.isArray(questions) ? questions : ["Was this a regular portion?"]
+  } catch (error: unknown) {
     console.error('Error generating clarifying questions:', error)
-    
-    // Check for specific OpenAI quota error
-    if (error?.status === 429 || error?.code === 'insufficient_quota') {
-      return ["AI temporarily unavailable. Could you tell me more about the portion sizes?"]
-    }
-    
-    return ["Could you tell me more about the portion sizes?"]
+    return ["Was this a regular portion, or was it on the larger or smaller side?"]
   }
-} 
+}

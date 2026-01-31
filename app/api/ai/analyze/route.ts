@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { analyzeMeal, generateClarifyingQuestions } from '@/lib/ai-service'
+import { analyzeMeal, analyzePhotoMeal, generateClarifyingQuestions } from '@/lib/ai-service'
 import { extractTokenFromHeader, verifyToken } from '@/lib/auth'
 
 export async function POST(request: NextRequest) {
@@ -13,40 +13,61 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { description, action = 'analyze' } = await request.json()
+    const { description, imageUrl, action = 'analyze' } = await request.json()
 
-    if (!description) {
-      return NextResponse.json(
-        { error: 'Description is required' },
-        { status: 400 }
-      )
+    // Photo analysis action
+    if (action === 'photo' && imageUrl) {
+      const analysis = await analyzePhotoMeal(imageUrl)
+      
+      return NextResponse.json({
+        action: 'photo',
+        analysis,
+        error: analysis.error
+      })
     }
 
+    // Text-based analysis
     if (action === 'analyze') {
+      if (!description) {
+        return NextResponse.json(
+          { error: 'Description is required for analysis' },
+          { status: 400 }
+        )
+      }
+      
       const analysis = await analyzeMeal(description)
       
       return NextResponse.json({
         action: 'analyze',
         analysis,
         message: analysis.summary,
-        recommendations: analysis.recommendations,
         error: analysis.error
       })
-    } else if (action === 'clarify') {
+    }
+    
+    // Clarifying questions
+    if (action === 'clarify') {
+      if (!description) {
+        return NextResponse.json(
+          { error: 'Description is required for clarification' },
+          { status: 400 }
+        )
+      }
+      
       const questions = await generateClarifyingQuestions(description)
       
       return NextResponse.json({
         action: 'clarify',
         questions,
-        error: questions.some(q => q.includes('AI temporarily unavailable')) ? 
-          'AI temporarily unavailable due to quota limits.' : undefined
+        error: questions.some(q => q.includes('unavailable')) ? 
+          'AI temporarily unavailable.' : undefined
       })
-    } else {
-      return NextResponse.json(
-        { error: 'Invalid action. Use "analyze" or "clarify"' },
-        { status: 400 }
-      )
     }
+    
+    return NextResponse.json(
+      { error: 'Invalid action. Use "analyze", "photo", or "clarify"' },
+      { status: 400 }
+    )
   } catch (error) {
     console.error('Error in AI analysis:', error)
     return NextResponse.json(
@@ -54,4 +75,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     )
   }
-} 
+}

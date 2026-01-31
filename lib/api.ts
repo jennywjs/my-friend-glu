@@ -105,4 +105,13 @@ export async function aiAnalyze({ description, action = 'analyze' }: { descripti
     body: JSON.stringify({ description, action })
   });
   return res.json();
+}
+
+export async function aiAnalyzePhoto({ imageUrl }: { imageUrl: string }) {
+  const res = await fetch(`${getAPIBase()}/ai/analyze`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ imageUrl, action: 'photo' })
+  });
+  return res.json();
 } 
